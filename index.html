@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌍 旅遊紀錄</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --accent: #38bdf8; 
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            --country-filled: #22c55e; 
+            --country-border: #334155;
+            --country-default: #111827;
+            --danger: #f43f5e;
+            --rating: #fbbf24;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background-color: var(--panel-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            color: var(--text-sub);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .sub-text {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.2rem;
+        }
+
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .view-toggle button {
+            width: auto;
+            padding: 0.8rem 2rem;
+            background-color: var(--panel-bg);
+            color: var(--text-sub);
+            border: 1px solid #475569;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .view-toggle button:hover {
+            border-color: var(--accent);
+            color: var(--text-main);
+        }
+
+        .view-toggle button.active {
+            background-color: var(--accent);
+            color: var(--bg-color);
+            border-color: var(--accent);
+            font-weight: bold;
+        }
+
+        .map-container {
+            position: relative;
+            background-color: var(--panel-bg);
+            border-radius: 12px;
+            border: 1px solid #334155;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .map-box {
+            height: 650px;
+            width: 100%;
+            z-index: 1;
+        }
+
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: var(--panel-bg);
+            color: var(--text-main);
+            border: 1px solid #475569;
+        }
+
+        .control-list-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .control-list-wrapper { grid-template-columns: 1fr; }
+        }
+
+        .control-panel {
+            background-color: var(--panel-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            height: fit-content;
+        }
+
+        .input-group {
+            display: grid;
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--bg-color);
+            border: 1px solid #475569;
+            color: var(--text-main);
+            border-radius: 6px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--accent);
+            color: #0f172a;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-submit:hover { opacity: 0.8; }
+        .btn-submit:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.6; }
+
+        .log-section {
+            background-color: var(--panel-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .log-section h2 { margin-bottom: 1rem; font-size: 1.3rem; color: var(--text-sub); }
+
+        .log-list {
+            list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        .log-list::-webkit-scrollbar { width: 6px; }
+        .log-list::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 3px; }
+
+        .log-item {
+            background-color: rgba(0,0,0,0.2);
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 3px solid transparent;
+        }
+
+        .log-item:hover { border-left-color: var(--accent); background-color: rgba(0,0,0,0.3); }
+
+        .log-details { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+        .badge-country { font-weight: bold; color: var(--country-filled); }
+        .loc-text { color: var(--text-sub); font-size: 0.9rem; }
+        .score-badge { font-weight: bold; color: var(--rating); font-size: 0.9rem; }
+        .delete-btn { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); width: auto; padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer; border-radius: 4px; }
+        .delete-btn:hover { background-color: var(--danger); color: #fff; }
+        </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🌍 旅遊紀錄</h1>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">制霸國家</div>
+                <div class="stat-number" id="count-country">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">探索世界進度</div>
+                <div class="stat-number" id="explore-percent">0.00%</div>
+                <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">解鎖省/州/直轄市</div>
+                <div class="stat-number" id="count-region">0</div>
+            </div>
+        </div>
+
+        <div class="view-toggle">
+            <div class="data-controls">
+    <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
+    <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV (供分析)</button>
+    <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入 JSON</button>
+    <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
+</div>
+            <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家版圖</button>
+            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：省/州/直轄市</button>
+        </div>
+
+        <div class="map-container">
+            <div id="map-main" class="map-box"></div>
+        </div>
+
+        <div class="control-list-wrapper">
+            <div class="control-panel">
+                <form id="tracker-form">
+                    <div class="input-group">
+                        <input type="text" id="input-country" placeholder="國家 (必填英文，例: Japan)" required>
+                        <input type="text" id="input-region" placeholder="省/州/直轄市 (例: Tokyo)" required>
+                        <input type="number" id="input-rating" min="1" max="10" placeholder="這趟的 Vibe 評分 (1-10)" required>
+                    </div>
+                    <button type="submit" id="submit-btn" class="btn-submit">空降新領地 🚀</button>
+                    <p style="color: var(--text-sub); font-size: 0.8rem; margin-top: 10px; text-align: center;">
+                        * 國家嚴格要求輸入標準英文，以確保地理面積算法精準命中。<br>
+                        * 若 B 面只顯示圓點未塗色，請嘗試輸入更完整的行政區英文名（如：Taipei City）。
+                    </p>
+                </form>
+            </div>
+
+            <div class="log-section">
+                <h2>戰略日誌</h2>
+                <ul class="log-list" id="log-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 強制升級金鑰到 V7，徹底清除那些沒有 GeoJSON 邊界資料的舊快取
+        let locations = JSON.parse(localStorage.getItem('travelLogV7')) || [];
+
+        let worldGeoJSON = null; 
+        const EARTH_LAND_AREA_KM2 = 148940000;
+        let currentMode = 'country';
+
+        const mapMain = L.map('map-main', { zoomControl: true }).setView([25, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OSM &copy; CARTO', minZoom: 2, maxZoom: 18
+        }).addTo(mapMain);
+
+        const countryLayerGroup = L.layerGroup().addTo(mapMain);
+        const regionLayerGroup = L.layerGroup(); 
+
+        const varCSS = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+        window.switchMode = function(mode) {
+            currentMode = mode;
+            document.getElementById('btn-mode-country').classList.remove('active');
+            document.getElementById('btn-mode-region').classList.remove('active');
+            
+            if (mode === 'country') {
+                document.getElementById('btn-mode-country').classList.add('active');
+                mapMain.removeLayer(regionLayerGroup);
+                mapMain.addLayer(countryLayerGroup);
+            } else {
+                document.getElementById('btn-mode-region').classList.add('active');
+                mapMain.removeLayer(countryLayerGroup);
+                mapMain.addLayer(regionLayerGroup);
+            }
+        };
+
+        async function loadCountryGeoJSON() {
+            try {
+                const res = await fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson');
+                worldGeoJSON = await res.json();
+                renderAll(); 
+            } catch (e) { console.error("世界地圖載入失敗:", e); }
+        }
+
+        function renderMapCountries() {
+            if (!worldGeoJSON) return;
+            countryLayerGroup.clearLayers();
+            
+            const visitedCountries = new Set(locations.map(loc => loc.country.toLowerCase()));
+            let totalExploredAreaKm2 = 0;
+
+            L.geoJSON(worldGeoJSON, {
+                style: (feature) => {
+                    const countryName = (feature.properties.name || feature.properties.ADMIN).toLowerCase();
+                    const isVisited = visitedCountries.has(countryName);
+                    
+                    if (isVisited) {
+                        const areaSqMeters = turf.area(feature);
+                        totalExploredAreaKm2 += (areaSqMeters / 1000000);
+                    }
+
+                    return {
+                        fillColor: isVisited ? varCSS('--country-filled') : varCSS('--country-default'),
+                        weight: 1,
+                        color: varCSS('--country-border'),
+                        fillOpacity: isVisited ? 0.6 : 0.3
+                    };
+                }
+            }).addTo(countryLayerGroup);
+
+            const percent = ((totalExploredAreaKm2 / EARTH_LAND_AREA_KM2) * 100).toFixed(4);
+            document.getElementById('explore-percent').innerText = `${percent}%`;
+            document.getElementById('explore-area').innerText = `${Math.round(totalExploredAreaKm2).toLocaleString()} km² / 1.48億 km²`;
+        }
+
+        function renderMapRegions() {
+            regionLayerGroup.clearLayers();
+
+            locations.forEach(loc => {
+                // 如果有抓到多邊形資料，就在 B 面狠狠地塗色
+                if (loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon')) {
+                    L.geoJSON(loc.geojson, {
+                        style: {
+                            fillColor: varCSS('--accent'), weight: 2, color: varCSS('--accent'), fillOpacity: 0.5
+                        }
+                    })
+                    .bindPopup(`<strong>${loc.region}</strong><br>${loc.country}<br>Vibe: ${loc.rating}/10`)
+                    .addTo(regionLayerGroup);
+                } 
+                // 如果 API 只給了中心點（無邊界資料），就降級畫圓點
+                else if (loc.lat && loc.lng) {
+                    L.circleMarker([loc.lat, loc.lng], {
+                        color: varCSS('--accent'), fillColor: varCSS('--accent'), fillOpacity: 0.8, radius: 6
+                    })
+                    .bindPopup(`<strong>${loc.region}</strong> (無邊界輪廓)<br>${loc.country}<br>Vibe: ${loc.rating}/10`)
+                    .addTo(regionLayerGroup);
+                }
+            });
+        }
+
+        function renderUI() {
+            const list = document.getElementById('log-list');
+            list.innerHTML = '';
+
+            [...locations].sort((a,b) => b.id - a.id).forEach(loc => {
+                const li = document.createElement('li');
+                li.className = 'log-item';
+                li.innerHTML = `
+                    <div class="log-details">
+                        <span class="badge-country">${loc.country}</span>
+                        <span class="loc-text">${loc.region}</span>
+                        <span class="score-badge">★${loc.rating}</span>
+                    </div>
+                    <button class="delete-btn" onclick="deleteLocation(${loc.id})">刪除</button>
+                `;
+                list.appendChild(li);
+            });
+
+            document.getElementById('count-country').innerText = new Set(locations.map(loc => loc.country.toLowerCase())).size;
+            document.getElementById('count-region').innerText = locations.length;
+            
+            localStorage.setItem('travelLogV7', JSON.stringify(locations));
+        }
+
+        function renderAll() {
+            renderUI();
+            renderMapCountries();
+            renderMapRegions();
+            renderCampaignTrails();
+        }
+
+        async function fetchRegionBoundary(region, country) {
+            try {
+                // 利用 Nominatim API 抓取邊界，加上 polygon_geojson=1 參數
+                const query = encodeURIComponent(`${region}, ${country}`);
+                const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&polygon_geojson=1&polygon_threshold=0.005`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
+                }
+            } catch (e) { console.error(e); }
+            return null;
+        }
+
+        const form = document.getElementById('tracker-form');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            submitBtn.innerText = '🛰️ 衛星掃描測繪中...';
+            submitBtn.disabled = true;
+
+            const countryInput = document.getElementById('input-country').value.trim();
+            const regionInput = document.getElementById('input-region').value.trim();
+            const ratingInput = document.getElementById('input-rating').value;
+            
+            const geoData = await fetchRegionBoundary(regionInput, countryInput);
+
+            if (!geoData) {
+                alert(`⚠️ 找不到地理資料，請確認拼寫是否正確（建議使用官方英文名）。`);
+                submitBtn.innerText = '空降新領地 🚀';
+                submitBtn.disabled = false;
+                return;
+            }
+
+            const newLocation = {
+                id: Date.now(),
+                country: countryInput,
+                region: regionInput,
+                rating: ratingInput,
+                lat: geoData.lat,
+                lng: geoData.lng,
+                geojson: geoData.geojson // 存下多邊形資料
+            };
+
+            locations.push(newLocation);
+            renderAll();
+            
+            mapMain.flyTo([geoData.lat, geoData.lng], currentMode === 'country' ? 4 : 6);
+
+            submitBtn.innerText = '空降新領地 🚀';
+            submitBtn.disabled = false;
+            form.reset();
+        });
+
+        window.deleteLocation = function(id) {
+            locations = locations.filter(loc => loc.id !== id);
+            renderAll();
+        };
+
+        renderUI();
+        renderMapRegions();
+        loadCountryGeoJSON();
+       
+
+
+// ==========================================
+// 模組 B：數據主權 (Data Sovereignty)
+// ==========================================
+window.exportData = function(type) {
+    if (locations.length === 0) return alert("尚未佔領任何領地，無資料可匯出！");
+    
+    let dataStr, mimeType, extension;
+    
+    if (type === 'json') {
+        // 完整無損匯出 (包含 GeoJSON 邊界資料)
+        dataStr = JSON.stringify(locations, null, 2);
+        mimeType = "application/json";
+        extension = "json";
+    } else if (type === 'csv') {
+        // 降維匯出供 R/Excel 分析 (捨棄龐大的 geojson 欄位，避免 CSV 亂碼破版)
+        const headers = ["id", "country", "region", "rating", "lat", "lng"];
+        const csvRows = [headers.join(",")];
+        
+        locations.forEach(loc => {
+            const row = headers.map(header => `"${loc[header] || ''}"`);
+            csvRows.push(row.join(","));
+        });
+        
+        dataStr = csvRows.join("\n");
+        mimeType = "text/csv;charset=utf-8;";
+        extension = "csv";
+    }
+
+    // 建立虛擬下載點
+    const blob = new Blob([dataStr], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `travel_campaign_log.${extension}`;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+window.importData = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (Array.isArray(importedData)) {
+                // 覆蓋本地資料庫並重新渲染
+                locations = importedData;
+                localStorage.setItem('travelLogV7', JSON.stringify(locations));
+                renderAll();
+                alert("✅ 戰略日誌載入成功，版圖已更新！");
+            } else {
+                alert("⚠️ JSON 格式有誤，請確認檔案來源。");
+            }
+        } catch (err) {
+            alert("⚠️ 檔案解析失敗，只支援本系統匯出的 JSON 檔。");
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // 清空 input 狀態，允許連續匯入同一個檔案
+};
+    </script>
+</body>
+</html>
