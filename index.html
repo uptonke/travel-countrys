@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 頂級戰略旅遊指揮中心</title>
+    <title>🌍 旅遊紀錄</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
@@ -92,7 +92,7 @@
 
     <div class="container">
         <header>
-            <h1>🌍 頂級戰略旅遊指揮中心</h1>
+            <h1>🌍 旅遊紀錄</h1>
         </header>
 
         <div class="stats-grid">
@@ -106,7 +106,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖城市/特區</div>
+                <div class="stat-label">解鎖城市/州/省分</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
         </div>
@@ -122,7 +122,7 @@
 
         <div class="view-toggle">
             <div class="data-controls">
-                <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
+                <button class="btn-data" onclick="exportData('json')">💾 備份 </button>
                 <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV</button>
                 <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入 JSON</button>
                 <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
@@ -161,7 +161,7 @@
                         <input type="number" id="input-ranking" min="1" placeholder="Vibe 排名 (例: 1 代表心目中第一名)" required>
                     </div>
                     
-                    <button type="submit" id="submit-btn" class="btn-submit">空降新領地 🚀</button>
+                    <button type="submit" id="submit-btn" class="btn-submit">新增地點 🚀</button>
                     <button type="button" id="cancel-edit-btn" class="btn-cancel" onclick="cancelEdit()">取消編輯</button>
                 </form>
             </div>
@@ -186,7 +186,7 @@
                         </select>
 
                         <select id="sort-by" style="padding: 0.4rem; font-size: 0.9rem; width: 110px;">
-                            <option value="date">出征日期</option>
+                            <option value="date">出發日期</option>
                             <option value="rank">Vibe 排名</option>
                         </select>
                     </div>
@@ -331,7 +331,7 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { type: 'bar', label: '出征次數', data: dataCounts, backgroundColor: varCSS('--accent'), borderRadius: 4, yAxisID: 'y' },
+                        { type: 'bar', label: '次數', data: dataCounts, backgroundColor: varCSS('--accent'), borderRadius: 4, yAxisID: 'y' },
                         { type: 'line', label: '停留天數', data: dataDays, borderColor: varCSS('--rating'), backgroundColor: varCSS('--rating'), borderWidth: 2, pointRadius: 4, yAxisID: 'y1' }
                     ]
                 },
@@ -572,7 +572,7 @@
 
             if (!geoData) {
                 alert(`⚠️ 找不到地理資料，請確認拼寫是否正確。`);
-                submitBtn.innerText = editingId ? '儲存變更 💾' : '空降新領地 🚀';
+                submitBtn.innerText = editingId ? '儲存變更 💾' : '新增地點 🚀';
                 submitBtn.disabled = false;
                 return;
             }
@@ -625,7 +625,7 @@
         window.cancelEdit = function() {
             editingId = null;
             document.getElementById('tracker-form').reset();
-            document.getElementById('submit-btn').innerText = '空降新領地 🚀';
+            document.getElementById('submit-btn').innerText = '新增地點 🚀';
             document.getElementById('submit-btn').style.backgroundColor = 'var(--accent)';
             document.getElementById('cancel-edit-btn').style.display = 'none';
             renderUI(); 
