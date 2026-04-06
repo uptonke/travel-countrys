@@ -158,7 +158,7 @@
                             </div>
                         </div>
 
-                        <input type="number" id="input-ranking" min="1" placeholder="Vibe 排名 (例: 1 代表心目中第一名)" required>
+                        <input type="number" id="input-ranking" min="1" placeholder="排名 (例: 1 代表心目中第一名)" required>
                     </div>
                     
                     <button type="submit" id="submit-btn" class="btn-submit">新增地點 🚀</button>
@@ -187,7 +187,7 @@
 
                         <select id="sort-by" style="padding: 0.4rem; font-size: 0.9rem; width: 110px;">
                             <option value="date">出發日期</option>
-                            <option value="rank">Vibe 排名</option>
+                            <option value="rank">排名</option>
                         </select>
                     </div>
                 </div>
@@ -398,7 +398,7 @@
             regionLayerGroup.clearLayers();
             locations.forEach(loc => {
                 const days = calculateDays(loc.dateStart, loc.dateEnd);
-                const popupContent = `<strong>${loc.region}</strong><br>${loc.country}<br>🏆 Vibe 排名: No.${loc.ranking}<br>⏱️ 停留: ${days} 天`;
+                const popupContent = `<strong>${loc.region}</strong><br>${loc.country}<br>🏆 排名: No.${loc.ranking}<br>⏱️ 停留: ${days} 天`;
                 if (loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon')) {
                     L.geoJSON(loc.geojson, { style: { fillColor: varCSS('--accent'), weight: 2, color: varCSS('--accent'), fillOpacity: 0.5 } }).bindPopup(popupContent).addTo(regionLayerGroup);
                 } else if (loc.lat && loc.lng) {
