@@ -18,7 +18,7 @@
             --country-border: #334155;
             --country-default: #111827;
             --danger: #f43f5e;
-            --rating: #fbbf24; /* 這裡沿用金黃色給排名使用 */
+            --rating: #fbbf24;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -51,9 +51,12 @@
         
         .control-panel { background-color: var(--panel-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; }
         .input-group { display: grid; gap: 0.8rem; margin-bottom: 1rem; }
+        
+        /* 1. 修正下拉選單樣式 */
         input, select { width: 100%; padding: 0.75rem; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 6px; outline: none; }
         input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+        select option { background-color: var(--bg-color); color: var(--text-main); }
 
         .btn-submit { width: 100%; padding: 1rem; background-color: var(--accent); color: #0f172a; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
         .btn-submit:hover { background-color: #0284c7; }
@@ -72,7 +75,6 @@
         .badge-country { font-weight: bold; color: var(--country-filled); }
         .score-badge { font-weight: bold; color: var(--rating); font-size: 0.9rem; }
         
-        /* 操作按鈕群組 */
         .action-group { display: flex; gap: 0.5rem; margin-left: 1rem; flex-shrink: 0; }
         .action-btn { background-color: transparent; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-radius: 4px; transition: 0.2s; }
         .edit-btn { color: var(--accent); border: 1px solid var(--accent); }
@@ -85,7 +87,7 @@
 
     <div class="container">
         <header>
-            <h1>🌍 戰略旅遊紀錄</h1>
+            <h1>🌍 旅遊紀錄</h1>
         </header>
 
         <div class="stats-grid">
@@ -152,9 +154,15 @@
             <div class="log-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                     <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-sub);">日誌</h2>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="search-log" placeholder="🔍 搜尋..." style="padding: 0.4rem; font-size: 0.9rem; width: 100px;">
-                        <select id="filter-year" style="padding: 0.4rem; font-size: 0.9rem; width: 110px;">
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <input type="text" id="search-log" placeholder="🔍 搜尋..." style="padding: 0.4rem; font-size: 0.9rem; width: 100px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
+                        
+                        <select id="sort-by" style="padding: 0.4rem; font-size: 0.9rem; width: 110px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
+                            <option value="time">最新登錄</option>
+                            <option value="rank">Vibe 排名</option>
+                        </select>
+
+                        <select id="filter-year" style="padding: 0.4rem; font-size: 0.9rem; width: 110px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
                             <option value="all">所有年份</option>
                         </select>
                     </div>
@@ -171,15 +179,14 @@
         let worldGeoJSON = null; 
         let countryAreaCache = {};
         let locations = [];
-        let editingId = null; // 追蹤目前正在編輯的 ID
+        let editingId = null;
 
-        // 防呆：安全讀取 LocalStorage，升級至 V11 並兼容舊版的 rating 轉 ranking
         try {
             const stored = JSON.parse(localStorage.getItem('travelLogV11')) || JSON.parse(localStorage.getItem('travelLogV10'));
             if (Array.isArray(stored)) {
                 locations = stored.map(loc => ({
                     ...loc,
-                    ranking: loc.ranking || loc.rating // 無痛轉移舊版的評分到排名
+                    ranking: loc.ranking || loc.rating 
                 }));
             }
         } catch(e) {
@@ -301,16 +308,25 @@
 
             const searchKeyword = (document.getElementById('search-log')?.value || '').toLowerCase();
             const filterYear = document.getElementById('filter-year')?.value || 'all';
+            const sortBy = document.getElementById('sort-by')?.value || 'time';
 
+            // 2. 修正年份選單不斷堆疊的問題
             const years = new Set(locations.map(loc => loc.dateStart ? loc.dateStart.substring(0, 4) : null).filter(y => y !== null));
             const yearSelect = document.getElementById('filter-year');
             
-            if (yearSelect && yearSelect.options.length <= 1) {
+            if (yearSelect) {
+                const currentSelection = yearSelect.value;
+                yearSelect.innerHTML = '<option value="all">所有年份</option>'; 
+                
                 [...years].sort().reverse().forEach(year => {
                     const option = document.createElement('option');
                     option.value = year; option.text = `${year} 年`;
                     yearSelect.appendChild(option);
                 });
+                
+                if (Array.from(yearSelect.options).some(opt => opt.value === currentSelection)) {
+                    yearSelect.value = currentSelection;
+                }
             }
 
             const filteredLocations = locations.filter(loc => {
@@ -322,8 +338,16 @@
                 return matchSearch && matchYear;
             });
 
-            // 將過濾後的清單依據 ID（登錄時間）排序
-            [...filteredLocations].sort((a,b) => b.id - a.id).forEach(loc => {
+            // 3. 實作排序邏輯
+            const sortedLocations = [...filteredLocations].sort((a, b) => {
+                if (sortBy === 'rank') {
+                    return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
+                } else {
+                    return b.id - a.id;
+                }
+            });
+
+            sortedLocations.forEach(loc => {
                 const li = document.createElement('li');
                 li.className = `log-item ${editingId === loc.id ? 'editing' : ''}`;
                 li.innerHTML = `
@@ -351,6 +375,7 @@
 
         document.getElementById('search-log')?.addEventListener('input', renderUI);
         document.getElementById('filter-year')?.addEventListener('change', renderUI);
+        document.getElementById('sort-by')?.addEventListener('change', renderUI); // 新增排序監聽
 
         function renderAll() {
             renderUI();
@@ -369,29 +394,25 @@
             return null;
         }
 
-        // --- 表單控制邏輯 (支援新增與編輯) ---
-        
         // 進入編輯模式
         window.editLocation = function(id) {
             const loc = locations.find(l => l.id === id);
             if (!loc) return;
 
-            // 將資料填回表單
             document.getElementById('input-country').value = loc.country;
             document.getElementById('input-region').value = loc.region;
             document.getElementById('input-date-start').value = loc.dateStart || '';
             document.getElementById('input-date-end').value = loc.dateEnd || '';
             document.getElementById('input-ranking').value = loc.ranking || '';
 
-            editingId = id; // 鎖定當前編輯的 ID
+            editingId = id; 
             
-            // 變更 UI 狀態
             document.getElementById('submit-btn').innerText = '儲存變更 💾';
             document.getElementById('submit-btn').style.backgroundColor = 'var(--rating)';
             document.getElementById('cancel-edit-btn').style.display = 'block';
             
-            renderUI(); // 重新渲染以套用高亮框線
-            document.getElementById('tracker-form').scrollIntoView({ behavior: 'smooth' }); // 捲動到表單
+            renderUI(); 
+            document.getElementById('tracker-form').scrollIntoView({ behavior: 'smooth' }); 
         };
 
         // 取消編輯
@@ -401,7 +422,7 @@
             document.getElementById('submit-btn').innerText = '空降新領地 🚀';
             document.getElementById('submit-btn').style.backgroundColor = 'var(--accent)';
             document.getElementById('cancel-edit-btn').style.display = 'none';
-            renderUI(); // 移除高亮框線
+            renderUI(); 
         };
 
         // 表單送出 (新增或更新)
@@ -430,13 +451,12 @@
             const dateRangeStr = `${formatDateCN(dateStartInput)} 到 ${formatDateCN(dateEndInput)}`;
 
             if (editingId) {
-                // 更新模式
                 const index = locations.findIndex(loc => loc.id === editingId);
                 if (index !== -1) {
                     locations[index] = {
                         ...locations[index],
                         dateRange: dateRangeStr,
-                        dateStart: dateStartInput, // 儲存原始日期供日後編輯使用
+                        dateStart: dateStartInput, 
                         dateEnd: dateEndInput,
                         country: countryInput,
                         region: regionInput,
@@ -446,9 +466,8 @@
                         geojson: geoData.geojson
                     };
                 }
-                cancelEdit(); // 儲存後重置表單狀態
+                cancelEdit(); 
             } else {
-                // 新增模式
                 const manualTimestamp = new Date(dateStartInput).getTime() + Math.floor(Math.random() * 1000);
                 locations.push({
                     id: manualTimestamp, 
@@ -471,14 +490,12 @@
             mapMain.flyTo([geoData.lat, geoData.lng], currentMode === 'country' ? 4 : 6);
         });
 
-        // 刪除
         window.deleteLocation = function(id) {
             locations = locations.filter(loc => loc.id !== id);
-            if (editingId === id) cancelEdit(); // 若刪除正在編輯的項目，順便重置表單
+            if (editingId === id) cancelEdit(); 
             renderAll();
         };
 
-        // 匯出/匯入
         window.exportData = function(type) {
             if (locations.length === 0) return alert("尚未佔領任何領地，無資料可匯出！");
             let dataStr, mimeType, extension;
@@ -517,7 +534,6 @@
             event.target.value = '';
         };
 
-        // 啟動
         renderUI();
         renderMapRegions();
         loadCountryGeoJSON();
