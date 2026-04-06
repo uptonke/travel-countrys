@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 頂級戰略旅遊指揮中心</title>
+    <title>🌍 旅遊紀錄</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
@@ -140,16 +140,14 @@
                             <div id="autocomplete-list" class="autocomplete-items"></div>
                         </div>
                         
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem;">
-                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-                                <label style="color: var(--text-sub); font-size: 0.85rem; margin-left: 0.2rem;">起始日</label>
-                                <input type="date" id="input-date-start" required>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
-                                <label style="color: var(--text-sub); font-size: 0.85rem; margin-left: 0.2rem;">結束日</label>
-                                <input type="date" id="input-date-end" required>
-                            </div>
-                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="chart-container" style="margin-bottom: 0;">
+                <canvas id="annualChart"></canvas>
+            </div>
+            <div class="chart-container" style="margin-bottom: 0;">
+                <canvas id="continentPieChart"></canvas>
+            </div>
+        </div>
 
                         <input type="number" id="input-ranking" min="1" placeholder="Vibe 排名 (例: 1 代表心目中第一名)" required>
                     </div>
@@ -268,10 +266,29 @@
             if (mode === 'country') mapMain.addLayer(countryLayerGroup);
             else if (mode === 'region') mapMain.addLayer(regionLayerGroup);
             else if (mode === 'heat') {
-                const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => [loc.lat, loc.lng, 1]); // 權重均為1，呈現密度
-                heatLayerGroup = L.heatLayer(heatPoints, {radius: 25, blur: 15, maxZoom: 10, gradient: {0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red'}}).addTo(mapMain);
+                const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => {
+                    // 1. 計算停留天數
+                    let days = 1;
+                    if (loc.dateStart && loc.dateEnd) {
+                        const diffTime = Math.abs(new Date(loc.dateEnd) - new Date(loc.dateStart));
+                        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    }
+                    
+                    // 2. 代入演算法：停留越久、排名越前，熱點權重越高
+                    const rank = parseInt(loc.ranking) || 10; // 防呆：沒填或填錯視為 10
+                    const weight = days * (1 / rank); 
+                    
+                    return [loc.lat, loc.lng, weight];
+                });
+                
+                // 3. 調整參數讓熱區更清楚 (放大 radius, 修改 maxZoom 避免縮放時點散掉)
+                heatLayerGroup = L.heatLayer(heatPoints, {
+                    radius: 35, 
+                    blur: 20, 
+                    maxZoom: 6, 
+                    gradient: {0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'}
+                }).addTo(mapMain);
             }
-        };
 
         async function loadCountryGeoJSON() {
             try {
@@ -281,40 +298,84 @@
             } catch (e) { console.error("世界地圖載入失敗:", e); }
         }
 
-        // --- Chart.js 年度火力圖 ---
+        // --- Chart.js 年度火力圖與圓餅圖 ---
         function renderChart(filteredLocs) {
-            const ctx = document.getElementById('annualChart').getContext('2d');
+            const ctxBar = document.getElementById('annualChart').getContext('2d');
+            const ctxPie = document.getElementById('continentPieChart').getContext('2d');
             
-            // 統計各年份出征次數
             const yearCounts = {};
+            const yearDays = {};
+            const continentCounts = {};
+
             filteredLocs.forEach(loc => {
+                // 1. 計算停留天數 (end - start + 1 包含頭尾)
+                let days = 1;
+                if (loc.dateStart && loc.dateEnd) {
+                    const start = new Date(loc.dateStart);
+                    const end = new Date(loc.dateEnd);
+                    const diffTime = Math.abs(end - start);
+                    days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
+                }
+
+                // 2. 年度統計
                 const y = loc.dateStart ? loc.dateStart.substring(0,4) : '未知';
                 yearCounts[y] = (yearCounts[y] || 0) + 1;
+                yearDays[y] = (yearDays[y] || 0) + days;
+
+                // 3. 洲別統計
+                const cont = getContinent(loc.country);
+                continentCounts[cont] = (continentCounts[cont] || 0) + 1;
             });
             
-            // 排除未知並排序年份
+            // --- 長條圖 + 折線圖 (年度出征次數 & 總停留天數雙軸) ---
             const labels = Object.keys(yearCounts).filter(y => y !== '未知').sort();
-            const data = labels.map(y => yearCounts[y]);
+            const dataCounts = labels.map(y => yearCounts[y]);
+            const dataDays = labels.map(y => yearDays[y]);
 
-            if(expeditionChart) expeditionChart.destroy();
-
-            expeditionChart = new Chart(ctx, {
+            if(window.expeditionChart) window.expeditionChart.destroy();
+            window.expeditionChart = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
                     labels: labels,
+                    datasets: [
+                        { type: 'bar', label: '出征次數', data: dataCounts, backgroundColor: varCSS('--accent'), borderRadius: 4, yAxisID: 'y' },
+                        { type: 'line', label: '停留天數', data: dataDays, borderColor: varCSS('--rating'), backgroundColor: varCSS('--rating'), borderWidth: 2, pointRadius: 4, yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: varCSS('--text-sub') } } },
+                    scales: {
+                        y: { type: 'linear', position: 'left', beginAtZero: true, ticks: { color: varCSS('--text-sub'), stepSize: 1 }, grid: { color: '#334155' } },
+                        y1: { type: 'linear', position: 'right', beginAtZero: true, ticks: { color: varCSS('--text-sub') }, grid: { display: false } },
+                        x: { ticks: { color: varCSS('--text-sub') }, grid: { display: false } }
+                    }
+                }
+            });
+
+            // --- 圓餅圖 (洲別分布) ---
+            const contLabels = Object.keys(continentCounts).map(c => {
+                const map = { 'Asia': '亞洲', 'Europe': '歐洲', 'Americas': '美洲', 'Oceania': '大洋洲', 'Africa': '非洲', 'Other': '其他' };
+                return map[c] || c;
+            });
+            const contData = Object.values(continentCounts);
+
+            if(window.continentPieChartInst) window.continentPieChartInst.destroy();
+            window.continentPieChartInst = new Chart(ctxPie, {
+                type: 'doughnut', // 甜甜圈圖視覺更乾淨
+                data: {
+                    labels: contLabels,
                     datasets: [{
-                        label: '領地開拓次數',
-                        data: data,
-                        backgroundColor: varCSS('--accent'),
-                        borderRadius: 4
+                        data: contData,
+                        backgroundColor: ['#38bdf8', '#22c55e', '#fbbf24', '#f43f5e', '#a855f7', '#64748b'],
+                        borderWidth: 0
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: varCSS('--text-sub'), stepSize: 1 }, grid: { color: '#334155' } },
-                        x: { ticks: { color: varCSS('--text-sub') }, grid: { display: false } }
+                    plugins: {
+                        legend: { position: 'right', labels: { color: varCSS('--text-sub') } },
+                        title: { display: true, text: '🌍 洲別分布', color: varCSS('--text-main'), font: { size: 16 } }
                     }
                 }
             });
