@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 旅遊紀錄</title>
+    <title>🌍 頂級戰略旅遊指揮中心</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
@@ -30,8 +30,9 @@
         .stat-label { color: var(--text-sub); font-size: 1rem; margin-top: 0.5rem; }
         .sub-text { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
 
-        /* 圖表區塊 */
-        .chart-container { background-color: var(--panel-bg); padding: 1rem; border-radius: 12px; border: 1px solid #334155; margin-bottom: 1.5rem; height: 250px; }
+        /* 圖表區塊 (並排) */
+        .chart-wrapper { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .chart-container { background-color: var(--panel-bg); padding: 1rem; border-radius: 12px; border: 1px solid #334155; height: 280px; position: relative; }
 
         .view-toggle { display: flex; justify-content: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
         .view-toggle button { width: auto; padding: 0.8rem 1.5rem; background-color: var(--panel-bg); color: var(--text-sub); border: 1px solid #475569; border-radius: 30px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s ease; }
@@ -77,6 +78,7 @@
         
         .badge-country { font-weight: bold; color: var(--country-filled); }
         .score-badge { font-weight: bold; color: var(--rating); font-size: 0.9rem; }
+        .days-badge { font-size: 0.8rem; color: #cbd5e1; background-color: #334155; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
         
         .action-group { display: flex; gap: 0.5rem; margin-left: 1rem; flex-shrink: 0; }
         .action-btn { background-color: transparent; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-radius: 4px; transition: 0.2s; }
@@ -90,7 +92,7 @@
 
     <div class="container">
         <header>
-            <h1>🌍 頂級戰略旅遊紀錄</h1>
+            <h1>🌍 頂級戰略旅遊指揮中心</h1>
         </header>
 
         <div class="stats-grid">
@@ -104,25 +106,30 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖省/州/城市</div>
+                <div class="stat-label">解鎖城市/特區</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
         </div>
 
-        <div class="chart-container">
-            <canvas id="annualChart"></canvas>
+        <div class="chart-wrapper">
+            <div class="chart-container">
+                <canvas id="annualChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="continentPieChart"></canvas>
+            </div>
         </div>
 
         <div class="view-toggle">
             <div class="data-controls">
                 <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
-                <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV (供分析)</button>
+                <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV</button>
                 <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入 JSON</button>
                 <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
             </div>
             <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家版圖</button>
-            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：省/州/城市</button>
-            <button id="btn-mode-heat" onclick="switchMode('heat')">🔥 C面：足跡熱區</button>
+            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：據點標示</button>
+            <button id="btn-mode-heat" onclick="switchMode('heat')">🔥 C面：權重熱區</button>
         </div>
 
         <div class="map-container">
@@ -140,14 +147,16 @@
                             <div id="autocomplete-list" class="autocomplete-items"></div>
                         </div>
                         
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-            <div class="chart-container" style="margin-bottom: 0;">
-                <canvas id="annualChart"></canvas>
-            </div>
-            <div class="chart-container" style="margin-bottom: 0;">
-                <canvas id="continentPieChart"></canvas>
-            </div>
-        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem;">
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <label style="color: var(--text-sub); font-size: 0.85rem; margin-left: 0.2rem;">起始日</label>
+                                <input type="date" id="input-date-start" required>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <label style="color: var(--text-sub); font-size: 0.85rem; margin-left: 0.2rem;">結束日</label>
+                                <input type="date" id="input-date-end" required>
+                            </div>
+                        </div>
 
                         <input type="number" id="input-ranking" min="1" placeholder="Vibe 排名 (例: 1 代表心目中第一名)" required>
                     </div>
@@ -159,11 +168,11 @@
 
             <div class="log-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-                    <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-sub);">日誌</h2>
+                    <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-sub);">戰略日誌</h2>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <input type="text" id="search-log" placeholder="🔍 搜尋..." style="padding: 0.4rem; font-size: 0.9rem; width: 100px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
+                        <input type="text" id="search-log" placeholder="🔍 搜尋..." style="padding: 0.4rem; font-size: 0.9rem; width: 100px;">
                         
-                        <select id="filter-continent" style="padding: 0.4rem; font-size: 0.9rem; width: 90px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
+                        <select id="filter-continent" style="padding: 0.4rem; font-size: 0.9rem; width: 90px;">
                             <option value="all">所有洲</option>
                             <option value="Asia">亞洲</option>
                             <option value="Europe">歐洲</option>
@@ -172,12 +181,12 @@
                             <option value="Africa">非洲</option>
                         </select>
 
-                        <select id="filter-year" style="padding: 0.4rem; font-size: 0.9rem; width: 100px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
+                        <select id="filter-year" style="padding: 0.4rem; font-size: 0.9rem; width: 100px;">
                             <option value="all">所有年份</option>
                         </select>
 
-                        <select id="sort-by" style="padding: 0.4rem; font-size: 0.9rem; width: 110px; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 4px;">
-                            <option value="time">最新登錄</option>
+                        <select id="sort-by" style="padding: 0.4rem; font-size: 0.9rem; width: 110px;">
+                            <option value="date">出征日期</option>
                             <option value="rank">Vibe 排名</option>
                         </select>
                     </div>
@@ -195,11 +204,12 @@
         let countryAreaCache = {};
         let locations = [];
         let editingId = null;
-        let expeditionChart = null; // Chart.js 實例
+        let chartBar = null; 
+        let chartPie = null;
 
         // 讀取資料
         try {
-            const stored = JSON.parse(localStorage.getItem('travelLogV11')) || JSON.parse(localStorage.getItem('travelLogV10'));
+            const stored = JSON.parse(localStorage.getItem('travelLogV12')) || JSON.parse(localStorage.getItem('travelLogV11')) || JSON.parse(localStorage.getItem('travelLogV10'));
             if (Array.isArray(stored)) {
                 locations = stored.map(loc => ({
                     ...loc,
@@ -208,11 +218,11 @@
             }
         } catch(e) { console.warn("快取讀取失敗"); }
 
-        // --- 洲際識別字典 (強大映射庫) ---
+        // --- 洲際識別庫 ---
         const continentMapping = {
-            "Asia": ["japan", "taiwan", "thailand", "malaysia", "china", "south korea", "united arab emirates", "singapore", "vietnam", "indonesia", "philippines", "india"],
-            "Europe": ["united kingdom", "france", "germany", "italy", "spain", "ukraine", "netherlands", "switzerland", "sweden", "austria", "belgium"],
-            "Americas": ["united states of america", "united states", "canada", "mexico", "brazil", "argentina", "peru", "chile"],
+            "Asia": ["japan", "taiwan", "thailand", "malaysia", "china", "south korea", "united arab emirates", "singapore", "vietnam", "indonesia", "philippines", "india", "hong kong", "macau"],
+            "Europe": ["united kingdom", "france", "germany", "italy", "spain", "ukraine", "netherlands", "switzerland", "sweden", "austria", "belgium", "portugal", "greece", "russia"],
+            "Americas": ["united states of america", "united states", "canada", "mexico", "brazil", "argentina", "peru", "chile", "colombia"],
             "Oceania": ["australia", "new zealand", "fiji"],
             "Africa": ["egypt", "south africa", "morocco", "kenya", "nigeria"]
         };
@@ -242,6 +252,11 @@
             const d = new Date(dateStr);
             return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
         }
+        function calculateDays(start, end) {
+            if (!start || !end) return 1;
+            const diffTime = Math.abs(new Date(end) - new Date(start));
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        }
 
         // --- 地圖初始化 ---
         const mapMain = L.map('map-main', { zoomControl: true }).setView([25, 0], 2);
@@ -251,9 +266,8 @@
 
         const countryLayerGroup = L.layerGroup().addTo(mapMain);
         const regionLayerGroup = L.layerGroup(); 
-        let heatLayerGroup = null; // 熱點圖層
+        let heatLayerGroup = null; 
 
-        // 視角切換 (包含 C 面熱區)
         window.switchMode = function(mode) {
             currentMode = mode;
             ['country', 'region', 'heat'].forEach(m => document.getElementById(`btn-mode-${m}`).classList.remove('active'));
@@ -267,28 +281,18 @@
             else if (mode === 'region') mapMain.addLayer(regionLayerGroup);
             else if (mode === 'heat') {
                 const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => {
-                    // 1. 計算停留天數
-                    let days = 1;
-                    if (loc.dateStart && loc.dateEnd) {
-                        const diffTime = Math.abs(new Date(loc.dateEnd) - new Date(loc.dateStart));
-                        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                    }
-                    
-                    // 2. 代入演算法：停留越久、排名越前，熱點權重越高
-                    const rank = parseInt(loc.ranking) || 10; // 防呆：沒填或填錯視為 10
-                    const weight = days * (1 / rank); 
-                    
+                    const days = calculateDays(loc.dateStart, loc.dateEnd);
+                    const rank = parseInt(loc.ranking) || 10;
+                    const weight = days * (1 / rank); // 核心：天數 * (1/排名)
                     return [loc.lat, loc.lng, weight];
                 });
                 
-                // 3. 調整參數讓熱區更清楚 (放大 radius, 修改 maxZoom 避免縮放時點散掉)
                 heatLayerGroup = L.heatLayer(heatPoints, {
-                    radius: 35, 
-                    blur: 20, 
-                    maxZoom: 6, 
+                    radius: 35, blur: 20, max: 15, maxZoom: 6, // max:15 控制極端天數不至於蓋滿全圖
                     gradient: {0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'}
                 }).addTo(mapMain);
             }
+        };
 
         async function loadCountryGeoJSON() {
             try {
@@ -298,7 +302,7 @@
             } catch (e) { console.error("世界地圖載入失敗:", e); }
         }
 
-        // --- Chart.js 年度火力圖與圓餅圖 ---
+        // --- 繪圖邏輯 ---
         function renderChart(filteredLocs) {
             const ctxBar = document.getElementById('annualChart').getContext('2d');
             const ctxPie = document.getElementById('continentPieChart').getContext('2d');
@@ -308,32 +312,21 @@
             const continentCounts = {};
 
             filteredLocs.forEach(loc => {
-                // 1. 計算停留天數 (end - start + 1 包含頭尾)
-                let days = 1;
-                if (loc.dateStart && loc.dateEnd) {
-                    const start = new Date(loc.dateStart);
-                    const end = new Date(loc.dateEnd);
-                    const diffTime = Math.abs(end - start);
-                    days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-                }
-
-                // 2. 年度統計
+                const days = calculateDays(loc.dateStart, loc.dateEnd);
                 const y = loc.dateStart ? loc.dateStart.substring(0,4) : '未知';
                 yearCounts[y] = (yearCounts[y] || 0) + 1;
                 yearDays[y] = (yearDays[y] || 0) + days;
 
-                // 3. 洲別統計
                 const cont = getContinent(loc.country);
                 continentCounts[cont] = (continentCounts[cont] || 0) + 1;
             });
             
-            // --- 長條圖 + 折線圖 (年度出征次數 & 總停留天數雙軸) ---
             const labels = Object.keys(yearCounts).filter(y => y !== '未知').sort();
             const dataCounts = labels.map(y => yearCounts[y]);
             const dataDays = labels.map(y => yearDays[y]);
 
-            if(window.expeditionChart) window.expeditionChart.destroy();
-            window.expeditionChart = new Chart(ctxBar, {
+            if(chartBar) chartBar.destroy();
+            chartBar = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -353,16 +346,15 @@
                 }
             });
 
-            // --- 圓餅圖 (洲別分布) ---
             const contLabels = Object.keys(continentCounts).map(c => {
                 const map = { 'Asia': '亞洲', 'Europe': '歐洲', 'Americas': '美洲', 'Oceania': '大洋洲', 'Africa': '非洲', 'Other': '其他' };
                 return map[c] || c;
             });
             const contData = Object.values(continentCounts);
 
-            if(window.continentPieChartInst) window.continentPieChartInst.destroy();
-            window.continentPieChartInst = new Chart(ctxPie, {
-                type: 'doughnut', // 甜甜圈圖視覺更乾淨
+            if(chartPie) chartPie.destroy();
+            chartPie = new Chart(ctxPie, {
+                type: 'doughnut',
                 data: {
                     labels: contLabels,
                     datasets: [{
@@ -405,7 +397,8 @@
         function renderMapRegions() {
             regionLayerGroup.clearLayers();
             locations.forEach(loc => {
-                const popupContent = `<strong>${loc.region}</strong><br>${loc.country}<br>🏆 Vibe 排名: No.${loc.ranking}`;
+                const days = calculateDays(loc.dateStart, loc.dateEnd);
+                const popupContent = `<strong>${loc.region}</strong><br>${loc.country}<br>🏆 Vibe 排名: No.${loc.ranking}<br>⏱️ 停留: ${days} 天`;
                 if (loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon')) {
                     L.geoJSON(loc.geojson, { style: { fillColor: varCSS('--accent'), weight: 2, color: varCSS('--accent'), fillOpacity: 0.5 } }).bindPopup(popupContent).addTo(regionLayerGroup);
                 } else if (loc.lat && loc.lng) {
@@ -422,9 +415,9 @@
             const searchKeyword = (document.getElementById('search-log')?.value || '').toLowerCase();
             const filterYear = document.getElementById('filter-year')?.value || 'all';
             const filterContinent = document.getElementById('filter-continent')?.value || 'all';
-            const sortBy = document.getElementById('sort-by')?.value || 'time';
+            const sortBy = document.getElementById('sort-by')?.value || 'date';
 
-            // 更新年份下拉選單
+            // 更新年份清單
             const years = new Set(locations.map(loc => loc.dateStart ? loc.dateStart.substring(0, 4) : null).filter(y => y !== null));
             const yearSelect = document.getElementById('filter-year');
             if (yearSelect) {
@@ -437,7 +430,6 @@
                 if (Array.from(yearSelect.options).some(opt => opt.value === currentSelection)) yearSelect.value = currentSelection;
             }
 
-            // 多維度過濾
             const filteredLocations = locations.filter(loc => {
                 const c = (loc.country || '').toLowerCase();
                 const r = (loc.region || '').toLowerCase();
@@ -451,16 +443,18 @@
                 return matchSearch && matchYear && matchContinent;
             });
 
-            // 連動圖表
             renderChart(filteredLocations);
 
             // 排序邏輯
             const sortedLocations = [...filteredLocations].sort((a, b) => {
                 if (sortBy === 'rank') return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
+                // 預設按日期排，如果沒有日期則按 ID 排
+                if(a.dateStart && b.dateStart) return new Date(b.dateStart) - new Date(a.dateStart);
                 return b.id - a.id;
             });
 
             sortedLocations.forEach(loc => {
+                const days = calculateDays(loc.dateStart, loc.dateEnd);
                 const li = document.createElement('li');
                 li.className = `log-item ${editingId === loc.id ? 'editing' : ''}`;
                 li.innerHTML = `
@@ -469,6 +463,7 @@
                             <span class="badge-country">${loc.country}</span>
                             <span style="color: var(--text-main); font-weight: bold;">${loc.region}</span>
                             <span class="score-badge">🏆 No.${loc.ranking}</span>
+                            <span class="days-badge">${days} 天</span>
                         </div>
                         <div style="color: var(--text-sub); font-size: 0.85rem;">📅 ${loc.dateRange || '未紀錄'}</div>
                     </div>
@@ -482,20 +477,21 @@
 
             document.getElementById('count-country').innerText = new Set(locations.map(loc => (loc.country||'').toLowerCase())).size;
             document.getElementById('count-region').innerText = locations.length;
-            localStorage.setItem('travelLogV11', JSON.stringify(locations));
+            localStorage.setItem('travelLogV12', JSON.stringify(locations));
         }
 
-        // 綁定篩選器事件
+        // 綁定事件
         ['search-log', 'filter-year', 'filter-continent', 'sort-by'].forEach(id => {
             document.getElementById(id)?.addEventListener('input', renderUI);
+            document.getElementById(id)?.addEventListener('change', renderUI);
         });
 
         function renderAll() {
             renderUI(); renderMapCountries(); renderMapRegions();
-            if(currentMode === 'heat') switchMode('heat'); // 刷新熱點
+            if(currentMode === 'heat') switchMode('heat'); 
         }
 
-        // --- 智慧偵測 Autocomplete (OpenStreetMap API) ---
+        // --- Autocomplete ---
         const regionInput = document.getElementById('input-region');
         const countryInput = document.getElementById('input-country');
         const autocompleteList = document.getElementById('autocomplete-list');
@@ -517,36 +513,34 @@
                     data.forEach(item => {
                         const div = document.createElement('div');
                         div.className = 'autocomplete-item';
-                        // 嘗試抓取國家名稱，如果沒有則留空
                         const detectedCountry = item.address?.country || '';
                         div.innerHTML = `<strong>${item.name}</strong> <span style="color:var(--text-sub); font-size:0.8rem;">${detectedCountry ? ', ' + detectedCountry : ''}</span>`;
                         
                         div.addEventListener('click', function() {
                             regionInput.value = item.name;
-                            if(detectedCountry) countryInput.value = detectedCountry; // 自動填入國家
+                            if(detectedCountry) countryInput.value = detectedCountry;
                             autocompleteList.style.display = 'none';
                         });
                         autocompleteList.appendChild(div);
                     });
                     autocompleteList.style.display = 'block';
                 } catch(e) {}
-            }, 400); // 延遲 400ms 避免過度呼叫 API
+            }, 400); 
         });
 
-        // 點擊空白處關閉下拉選單
         document.addEventListener('click', function (e) {
             if (e.target !== regionInput && e.target !== autocompleteList) {
                 autocompleteList.style.display = 'none';
             }
         });
 
-        // 日期防呆
-        const dateStartEl = document.getElementById('input-date-start');
-        const dateEndEl = document.getElementById('input-date-end');
-        if(dateStartEl && dateEndEl) {
-            dateStartEl.addEventListener('change', function() {
-                dateEndEl.min = this.value;
-                if (dateEndEl.value && dateEndEl.value < this.value) dateEndEl.value = this.value;
+        // --- 表單邏輯 ---
+        const dateStartElForm = document.getElementById('input-date-start');
+        const dateEndElForm = document.getElementById('input-date-end');
+        if(dateStartElForm && dateEndElForm) {
+            dateStartElForm.addEventListener('change', function() {
+                dateEndElForm.min = this.value;
+                if (dateEndElForm.value && dateEndElForm.value < this.value) dateEndElForm.value = this.value;
             });
         }
 
@@ -561,7 +555,6 @@
             return null;
         }
 
-        // 表單送出
         document.getElementById('tracker-form')?.addEventListener('submit', async function(e) {
             e.preventDefault();
             const submitBtn = document.getElementById('submit-btn');
@@ -571,8 +564,8 @@
             const rawCountry = countryInput.value;
             const standardizedCountry = standardizeCountry(rawCountry);
             const rInput = regionInput.value.trim();
-            const dStart = dateStartEl.value;
-            const dEnd = dateEndEl.value;
+            const dStart = dateStartElForm.value;
+            const dEnd = dateEndElForm.value;
             const rank = document.getElementById('input-ranking').value;
             
             const geoData = await fetchRegionBoundary(rInput, standardizedCountry);
@@ -617,8 +610,8 @@
             if (!loc) return;
             countryInput.value = loc.country;
             regionInput.value = loc.region;
-            dateStartEl.value = loc.dateStart || '';
-            dateEndEl.value = loc.dateEnd || '';
+            dateStartElForm.value = loc.dateStart || '';
+            dateEndElForm.value = loc.dateEnd || '';
             document.getElementById('input-ranking').value = loc.ranking || '';
             editingId = id; 
             
@@ -673,7 +666,7 @@
                     const importedData = JSON.parse(e.target.result);
                     if (Array.isArray(importedData)) {
                         locations = importedData;
-                        localStorage.setItem('travelLogV11', JSON.stringify(locations));
+                        localStorage.setItem('travelLogV12', JSON.stringify(locations));
                         renderAll();
                         alert("✅ 日誌載入成功！");
                     } else alert("⚠️ JSON 格式有誤");
