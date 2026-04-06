@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 戰略旅遊紀錄</title>
+    <title>🌍 旅遊紀錄</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
@@ -47,30 +47,30 @@
         .map-box { height: 650px; width: 100%; z-index: 1; }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-bg); color: var(--text-main); border: 1px solid #475569; }
 
-        .control-list-wrapper { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; }
+        /* 版面控制：確保一左一右 */
+        .control-list-wrapper { display: grid; grid-template-columns: 1fr 1.5fr; gap: 1.5rem; align-items: start; }
         @media (max-width: 900px) { .control-list-wrapper { grid-template-columns: 1fr; } }
-        .control-panel { background-color: var(--panel-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; height: fit-content; }
+        
+        .control-panel { background-color: var(--panel-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; }
         .input-group { display: grid; gap: 0.8rem; margin-bottom: 1rem; }
-        input { width: 100%; padding: 0.75rem; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 6px; outline: none; }
-        input:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+        input, select { width: 100%; padding: 0.75rem; background-color: var(--bg-color); border: 1px solid #475569; color: var(--text-main); border-radius: 6px; outline: none; }
+        input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 
         .btn-submit { width: 100%; padding: 1rem; background-color: var(--accent); color: #0f172a; border: none; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
         .btn-submit:hover { opacity: 0.8; }
         .btn-submit:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.6; }
 
-        .log-section { background-color: var(--panel-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; }
-        .log-section h2 { margin-bottom: 1rem; font-size: 1.3rem; color: var(--text-sub); }
-        .log-list { list-style: none; max-height: 400px; overflow-y: auto; padding-right: 0.5rem; }
+        .log-section { background-color: var(--panel-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; height: 100%; min-height: 400px; }
+        .log-list { list-style: none; max-height: 500px; overflow-y: auto; padding-right: 0.5rem; }
         .log-list::-webkit-scrollbar { width: 6px; }
         .log-list::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 3px; }
         .log-item { background-color: rgba(0,0,0,0.2); padding: 0.8rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid transparent; }
         .log-item:hover { border-left-color: var(--accent); background-color: rgba(0,0,0,0.3); }
-        .log-details { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+        
         .badge-country { font-weight: bold; color: var(--country-filled); }
-        .loc-text { color: var(--text-sub); font-size: 0.9rem; }
         .score-badge { font-weight: bold; color: var(--rating); font-size: 0.9rem; }
-        .delete-btn { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); width: auto; padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer; border-radius: 4px; }
+        .delete-btn { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-radius: 4px; transition: 0.2s; }
         .delete-btn:hover { background-color: var(--danger); color: #fff; }
     </style>
 </head>
@@ -78,12 +78,12 @@
 
     <div class="container">
         <header>
-            <h1>🌍 戰略旅遊紀錄</h1>
+            <h1>🌍 旅遊紀錄</h1>
         </header>
 
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">制霸國家</div>
+                <div class="stat-label">去過國家</div>
                 <div class="stat-number" id="count-country">0</div>
             </div>
             <div class="stat-card">
@@ -92,7 +92,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖省/州/直轄市</div>
+                <div class="stat-label">解鎖省/州/城市</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
         </div>
@@ -105,19 +105,20 @@
                 <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
             </div>
             <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家版圖</button>
-            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：省/州/直轄市</button>
+            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：省/州/城市</button>
         </div>
 
         <div class="map-container">
             <div id="map-main" class="map-box"></div>
         </div>
 
-       <div class="control-list-wrapper">
+        <div class="control-list-wrapper">
+            
             <div class="control-panel">
                 <form id="tracker-form">
                     <div class="input-group">
-                        <input type="text" id="input-country" placeholder="國家 (必填英文，例: Japan)" required>
-                        <input type="text" id="input-region" placeholder="省/州/直轄市 (例: Tokyo)" required>
+                        <input type="text" id="input-country" placeholder="國家 (必填英文)" required>
+                        <input type="text" id="input-region" placeholder="省/州/城市" required>
                         
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem;">
                             <div style="display: flex; flex-direction: column; gap: 0.3rem;">
@@ -134,26 +135,86 @@
                     </div>
                     
                     <button type="submit" id="submit-btn" class="btn-submit">空降新領地 🚀</button>
-                    
                     <p style="color: var(--text-sub); font-size: 0.8rem; margin-top: 10px; text-align: center;">
                         * 國家建議輸入標準英文，以確保地理面積精準命中。
                     </p>
                 </form>
-            </div> <div class="log-section">
-                <h2>戰略日誌</h2>
+            </div>
+
+            <div class="log-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-sub);">戰略日誌</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="search-log" placeholder="🔍 搜尋..." style="padding: 0.4rem; font-size: 0.9rem; width: 100px;">
+                        <select id="filter-year" style="padding: 0.4rem; font-size: 0.9rem; width: 110px;">
+                            <option value="all">所有年份</option>
+                        </select>
+                    </div>
+                </div>
                 <ul class="log-list" id="log-list"></ul>
             </div>
+
         </div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 金鑰 V9: 移除行軍軌跡，改用日期區間
-        let locations = JSON.parse(localStorage.getItem('travelLogV9')) || [];
-
-        let worldGeoJSON = null; 
+        // 核心常數與變數 (絕對乾淨，無重複宣告)
         const EARTH_LAND_AREA_KM2 = 148940000;
         let currentMode = 'country';
+        let worldGeoJSON = null; 
+        let countryAreaCache = {};
+        let locations = [];
 
+        // 防呆：安全讀取 LocalStorage (升級至 V10)
+        try {
+            const stored = JSON.parse(localStorage.getItem('travelLogV10'));
+            if (Array.isArray(stored)) locations = stored;
+        } catch(e) {
+            console.warn("快取讀取失敗，已重置為空陣列");
+        }
+
+        // 日期約束邏輯
+        const dateStartEl = document.getElementById('input-date-start');
+        const dateEndEl = document.getElementById('input-date-end');
+        if(dateStartEl && dateEndEl) {
+            dateStartEl.addEventListener('change', function() {
+                dateEndEl.min = this.value;
+                if (dateEndEl.value && dateEndEl.value < this.value) dateEndEl.value = this.value;
+            });
+        }
+
+        // 國家名稱標準化
+        const countryAliasMap = {
+            "us": "United States of America", "usa": "United States of America", "united states": "United States of America",
+            "uk": "United Kingdom", "great britain": "United Kingdom", "england": "United Kingdom",
+            "uae": "United Arab Emirates", "korea": "South Korea", "south korea": "South Korea",
+            "prc": "China", "roc": "Taiwan", "taiwan": "Taiwan", "ua": "Ukraine"
+        };
+        function standardizeCountry(input) {
+            const lower = (input || '').trim().toLowerCase();
+            return countryAliasMap[lower] || (input || '').trim();
+        }
+
+        // 面積快取計算
+        function getCountryArea(feature) {
+            const name = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
+            if (!name) return 0;
+            if (!countryAreaCache[name]) {
+                countryAreaCache[name] = turf.area(feature) / 1_000_000;
+            }
+            return countryAreaCache[name];
+        }
+
+        // 輔助函數
+        const varCSS = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        function formatDateCN(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
+        }
+
+        // 地圖初始化
         const mapMain = L.map('map-main', { zoomControl: true }).setView([25, 0], 2);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OSM &copy; CARTO', minZoom: 2, maxZoom: 18
@@ -161,15 +222,6 @@
 
         const countryLayerGroup = L.layerGroup().addTo(mapMain);
         const regionLayerGroup = L.layerGroup(); 
-
-        const varCSS = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-        // 日期格式化工具：轉換成 xxxx年xx月xx日
-        function formatDateCN(dateStr) {
-            if (!dateStr) return '';
-            const d = new Date(dateStr);
-            return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
-        }
 
         // 視角切換
         window.switchMode = function(mode) {
@@ -188,7 +240,7 @@
             }
         };
 
-        // 載入世界地圖
+        // 異步讀取世界邊界
         async function loadCountryGeoJSON() {
             try {
                 const res = await fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson');
@@ -197,29 +249,23 @@
             } catch (e) { console.error("世界地圖載入失敗:", e); }
         }
 
-        // A面：國家塗色
+        // 渲染A面：國家
         function renderMapCountries() {
             if (!worldGeoJSON) return;
             countryLayerGroup.clearLayers();
             
-            const visitedCountries = new Set(locations.map(loc => loc.country.toLowerCase()));
+            const visitedCountries = new Set(locations.map(loc => (loc.country || '').toLowerCase()));
             let totalExploredAreaKm2 = 0;
 
             L.geoJSON(worldGeoJSON, {
                 style: (feature) => {
-                    const countryName = (feature.properties.name || feature.properties.ADMIN).toLowerCase();
+                    const countryName = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
                     const isVisited = visitedCountries.has(countryName);
-                    
-                    if (isVisited) {
-                        const areaSqMeters = turf.area(feature);
-                        totalExploredAreaKm2 += (areaSqMeters / 1000000);
-                    }
+                    if (isVisited) totalExploredAreaKm2 += getCountryArea(feature);
 
                     return {
                         fillColor: isVisited ? varCSS('--country-filled') : varCSS('--country-default'),
-                        weight: 1,
-                        color: varCSS('--country-border'),
-                        fillOpacity: isVisited ? 0.6 : 0.3
+                        weight: 1, color: varCSS('--country-border'), fillOpacity: isVisited ? 0.6 : 0.3
                     };
                 }
             }).addTo(countryLayerGroup);
@@ -229,10 +275,9 @@
             document.getElementById('explore-area').innerText = `${Math.round(totalExploredAreaKm2).toLocaleString()} km² / 1.48億 km²`;
         }
 
-        // B面：行政區塗色與圓點
+        // 渲染B面：行政區
         function renderMapRegions() {
             regionLayerGroup.clearLayers();
-
             locations.forEach(loc => {
                 if (loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon')) {
                     L.geoJSON(loc.geojson, {
@@ -246,63 +291,89 @@
             });
         }
 
-        // 渲染清單
+        // 渲染UI看板與清單
         function renderUI() {
             const list = document.getElementById('log-list');
+            if(!list) return;
             list.innerHTML = '';
 
-            // 清單由新到舊顯示
-            [...locations].sort((a,b) => b.id - a.id).forEach(loc => {
+            const searchKeyword = (document.getElementById('search-log')?.value || '').toLowerCase();
+            const filterYear = document.getElementById('filter-year')?.value || 'all';
+
+            const years = new Set(locations.map(loc => loc.dateRange ? loc.dateRange.substring(0, 4) : null).filter(y => y !== null));
+            const yearSelect = document.getElementById('filter-year');
+            
+            if (yearSelect && yearSelect.options.length <= 1) {
+                [...years].sort().reverse().forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year; option.text = `${year} 年`;
+                    yearSelect.appendChild(option);
+                });
+            }
+
+            const filteredLocations = locations.filter(loc => {
+                const c = (loc.country || '').toLowerCase();
+                const r = (loc.region || '').toLowerCase();
+                const matchSearch = c.includes(searchKeyword) || r.includes(searchKeyword);
+                const locYear = loc.dateRange ? loc.dateRange.substring(0, 4) : 'none';
+                const matchYear = filterYear === 'all' || locYear === filterYear;
+                return matchSearch && matchYear;
+            });
+
+            [...filteredLocations].sort((a,b) => b.id - a.id).forEach(loc => {
                 const li = document.createElement('li');
                 li.className = 'log-item';
                 li.innerHTML = `
-                    <div class="log-details">
-                        <span class="badge-country">${loc.country}</span>
-                        <span class="loc-text">${loc.region}</span>
-                        <span class="loc-text" style="color: var(--text-sub);">📅 ${loc.dateRange || '未紀錄'}</span>
-                        <span class="score-badge">★${loc.rating}</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; flex: 1;">
+                        <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
+                            <span class="badge-country">${loc.country}</span>
+                            <span style="color: var(--text-main); font-weight: bold;">${loc.region}</span>
+                            <span class="score-badge">★ ${loc.rating}</span>
+                        </div>
+                        <div style="color: var(--text-sub); font-size: 0.85rem;">📅 ${loc.dateRange || '未紀錄'}</div>
                     </div>
-                    <button class="delete-btn" onclick="deleteLocation(${loc.id})">刪除</button>
+                    <button class="delete-btn" style="margin-left: 1rem; flex-shrink: 0;" onclick="deleteLocation(${loc.id})">刪除</button>
                 `;
                 list.appendChild(li);
             });
 
-            document.getElementById('count-country').innerText = new Set(locations.map(loc => loc.country.toLowerCase())).size;
+            document.getElementById('count-country').innerText = new Set(locations.map(loc => (loc.country||'').toLowerCase())).size;
             document.getElementById('count-region').innerText = locations.length;
             
-            localStorage.setItem('travelLogV9', JSON.stringify(locations));
+            localStorage.setItem('travelLogV10', JSON.stringify(locations));
         }
 
-        // 總指揮中心
+        // 綁定事件
+        document.getElementById('search-log')?.addEventListener('input', renderUI);
+        document.getElementById('filter-year')?.addEventListener('change', renderUI);
+
         function renderAll() {
             renderUI();
             renderMapCountries();
             renderMapRegions();
         }
 
-        // API 取 GeoJSON
+        // Geocoding API
         async function fetchRegionBoundary(region, country) {
             try {
                 const query = encodeURIComponent(`${region}, ${country}`);
                 const url = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&polygon_geojson=1&polygon_threshold=0.005`;
                 const response = await fetch(url);
                 const data = await response.json();
-                if (data && data.length > 0) {
-                    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
-                }
+                if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
             } catch (e) { console.error(e); }
             return null;
         }
 
         // 表單送出
-        document.getElementById('tracker-form').addEventListener('submit', async function(e) {
+        document.getElementById('tracker-form')?.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
             const submitBtn = document.getElementById('submit-btn');
             submitBtn.innerText = '🛰️ 衛星掃描測繪中...';
             submitBtn.disabled = true;
 
-            const countryInput = document.getElementById('input-country').value.trim();
+            const rawCountry = document.getElementById('input-country').value;
+            const countryInput = standardizeCountry(rawCountry);
             const regionInput = document.getElementById('input-region').value.trim();
             const dateStartInput = document.getElementById('input-date-start').value;
             const dateEndInput = document.getElementById('input-date-end').value;
@@ -317,24 +388,16 @@
                 return;
             }
 
-            // 格式化日期區間
             const dateRangeStr = `${formatDateCN(dateStartInput)} 到 ${formatDateCN(dateEndInput)}`;
             const manualTimestamp = new Date(dateStartInput).getTime() + Math.floor(Math.random() * 1000);
 
-            const newLocation = {
-                id: manualTimestamp,
-                dateRange: dateRangeStr,
-                country: countryInput,
-                region: regionInput,
-                rating: ratingInput,
-                lat: geoData.lat,
-                lng: geoData.lng,
-                geojson: geoData.geojson
-            };
-
-            locations.push(newLocation);
-            renderAll();
+            locations.push({
+                id: manualTimestamp, dateRange: dateRangeStr,
+                country: countryInput, region: regionInput, rating: ratingInput,
+                lat: geoData.lat, lng: geoData.lng, geojson: geoData.geojson
+            });
             
+            renderAll();
             mapMain.flyTo([geoData.lat, geoData.lng], currentMode === 'country' ? 4 : 6);
 
             submitBtn.innerText = '空降新領地 🚀';
@@ -348,34 +411,24 @@
             renderAll();
         };
 
-        // 模組 B：數據主權匯出入
+        // 匯出/匯入
         window.exportData = function(type) {
             if (locations.length === 0) return alert("尚未佔領任何領地，無資料可匯出！");
             let dataStr, mimeType, extension;
-            
             if (type === 'json') {
                 dataStr = JSON.stringify(locations, null, 2);
-                mimeType = "application/json";
-                extension = "json";
+                mimeType = "application/json"; extension = "json";
             } else if (type === 'csv') {
                 const headers = ["id", "dateRange", "country", "region", "rating", "lat", "lng"];
                 const csvRows = [headers.join(",")];
-                locations.forEach(loc => {
-                    const row = headers.map(header => `"${loc[header] || ''}"`);
-                    csvRows.push(row.join(","));
-                });
+                locations.forEach(loc => csvRows.push(headers.map(header => `"${loc[header] || ''}"`).join(",")));
                 dataStr = csvRows.join("\n");
-                mimeType = "text/csv;charset=utf-8;";
-                extension = "csv";
+                mimeType = "text/csv;charset=utf-8;"; extension = "csv";
             }
-
             const blob = new Blob([dataStr], { type: mimeType });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `travel_campaign_log.${extension}`;
-            a.click();
-            URL.revokeObjectURL(url);
+            const a = document.createElement("a"); a.href = url; a.download = `travel_campaign_log.${extension}`;
+            a.click(); URL.revokeObjectURL(url);
         };
 
         window.importData = function(event) {
@@ -387,17 +440,17 @@
                     const importedData = JSON.parse(e.target.result);
                     if (Array.isArray(importedData)) {
                         locations = importedData;
-                        localStorage.setItem('travelLogV9', JSON.stringify(locations));
+                        localStorage.setItem('travelLogV10', JSON.stringify(locations));
                         renderAll();
                         alert("✅ 戰略日誌載入成功，版圖已更新！");
-                    } else { alert("⚠️ JSON 格式有誤，請確認檔案來源。"); }
+                    } else alert("⚠️ JSON 格式有誤，請確認檔案來源。");
                 } catch (err) { alert("⚠️ 檔案解析失敗，只支援本系統匯出的 JSON 檔。"); }
             };
             reader.readAsText(file);
             event.target.value = '';
         };
 
-        // 初次啟動載入
+        // 啟動
         renderUI();
         renderMapRegions();
         loadCountryGeoJSON();
