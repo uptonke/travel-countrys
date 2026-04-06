@@ -106,8 +106,13 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖城市/州/省分</div>
+                <div class="stat-label">解鎖城市/特區</div>
                 <div class="stat-number" id="count-region">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">最大板塊曝險</div>
+                <div class="stat-number" id="exposure-continent" style="color: var(--rating);">0%</div>
+                <div class="sub-text" id="exposure-country">單一國家重壓: 0%</div>
             </div>
         </div>
 
@@ -475,8 +480,46 @@
                 list.appendChild(li);
             });
 
+            // 更新基礎看板數據
             document.getElementById('count-country').innerText = new Set(locations.map(loc => (loc.country||'').toLowerCase())).size;
             document.getElementById('count-region').innerText = locations.length;
+            
+            // 👉 新增：核心曝險佔比計算 (Geographic Concentration Risk)
+            if (locations.length > 0) {
+                let totalDays = 0;
+                const continentDays = {};
+                const countryDays = {};
+
+                // 以「停留天數」作為權重基礎
+                locations.forEach(loc => {
+                    const days = calculateDays(loc.dateStart, loc.dateEnd);
+                    totalDays += days;
+                    
+                    const cont = getContinent(loc.country);
+                    const ctry = standardizeCountry(loc.country);
+                    
+                    continentDays[cont] = (continentDays[cont] || 0) + days;
+                    countryDays[ctry] = (countryDays[ctry] || 0) + days;
+                });
+
+                // 找出最大洲別曝險 (Macro-level)
+                const maxContinent = Object.keys(continentDays).reduce((a, b) => continentDays[a] > continentDays[b] ? a : b);
+                const maxContinentPct = ((continentDays[maxContinent] / totalDays) * 100).toFixed(1);
+                
+                // 找出最大國家重壓 (Micro-level)
+                const maxCountry = Object.keys(countryDays).reduce((a, b) => countryDays[a] > countryDays[b] ? a : b);
+                const maxCountryPct = ((countryDays[maxCountry] / totalDays) * 100).toFixed(1);
+
+                // 中文化洲名映射
+                const continentNameMap = { 'Asia': '亞洲', 'Europe': '歐洲', 'Americas': '美洲', 'Oceania': '大洋洲', 'Africa': '非洲', 'Other': '其他' };
+                
+                document.getElementById('exposure-continent').innerText = `${continentNameMap[maxContinent] || maxContinent} ${maxContinentPct}%`;
+                document.getElementById('exposure-country').innerText = `單一國家重壓: ${maxCountry} ${maxCountryPct}%`;
+            } else {
+                document.getElementById('exposure-continent').innerText = `0%`;
+                document.getElementById('exposure-country').innerText = `單一國家重壓: 0%`;
+            }
+
             localStorage.setItem('travelLogV12', JSON.stringify(locations));
         }
 
