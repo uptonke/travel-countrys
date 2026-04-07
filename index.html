@@ -105,7 +105,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖據點總數</div>
+                <div class="stat-label">解鎖城市總數</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
             <div class="stat-card">
@@ -204,8 +204,8 @@
         // ==========================================
         // 1. SUPABASE 初始化設定 (⚠️ 請務必換成你的金鑰)
         // ==========================================
-        const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
-        const supabaseKey = 'sb_publishable_lDfwRDxgMhzRwVk0-Qu3vg_9HTmTFZy';
+        const supabaseUrl = 'YOUR_SUPABASE_URL'; 
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         // ==========================================
@@ -264,7 +264,8 @@
             "Africa": ["egypt", "south africa", "morocco", "kenya", "nigeria"]
         };
         const countryAliasMap = { "us": "United States of America", "usa": "United States of America", "uk": "United Kingdom", "prc": "China", "roc": "Taiwan", "ua": "Ukraine" };
-        // --- 修正版：導入 FlagCDN 解決 Windows 不支援國旗 Emoji 的問題 ---
+        
+        // --- 導入 CDN 影像解決 Windows 不支援國旗 Emoji 的問題 ---
         const flagCodeMap = {
             "japan": "jp", "taiwan": "tw", "united kingdom": "gb", "united states of america": "us", "united states": "us",
             "thailand": "th", "malaysia": "my", "china": "cn", "south korea": "kr", "france": "fr", 
@@ -301,7 +302,6 @@
         }
         
         function getCountryArea(feature) {
-            // ... (維持原樣)
             const name = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
             if (!name) return 0;
             if (!countryAreaCache[name]) countryAreaCache[name] = turf.area(feature) / 1_000_000;
@@ -452,37 +452,25 @@
             });
 
             const countriesData = {}; let totalDaysAll = 0;
+            const uniqueCities = new Set(); // 👉 用來計算解鎖據點總數
+            
             filteredLocations.forEach(loc => {
                 const days = calculateDays(loc.dateStart, loc.dateEnd);
                 const cName = loc.country.toUpperCase(); const rank = parseInt(loc.ranking) || 10;
-                
-                // 加入 regions Set 來計算不重複的城市
-                if (!countriesData[cName]) countriesData[cName] = { totalDays: 0, visits: 0, totalRank: 0, regions: new Set() };
-                
-                countriesData[cName].totalDays += days; 
-                countriesData[cName].visits += 1; 
-                countriesData[cName].totalRank += rank; 
-                countriesData[cName].regions.add(loc.region.toLowerCase()); // 記錄獨立據點
-                
-                totalDaysAll += days;
+                if (!countriesData[cName]) countriesData[cName] = { totalDays: 0, visits: 0, totalRank: 0 };
+                countriesData[cName].totalDays += days; countriesData[cName].visits += 1; countriesData[cName].totalRank += rank; totalDaysAll += days;
+                uniqueCities.add(`${cName}_${loc.region.toLowerCase()}`); // 👉 將據點加入 Set
             });
 
             Object.keys(countriesData).sort((a,b) => countriesData[b].totalDays - countriesData[a].totalDays).forEach(c => {
                 const stat = countriesData[c]; const avgRank = (stat.totalRank / stat.visits).toFixed(1);
-                const cityCount = stat.regions.size; // 算出獨立城市/據點數量
-                
+                // 找出此國家有多少個獨立城市
+                const countryCities = Array.from(uniqueCities).filter(city => city.startsWith(`${c}_`)).length;
+
                 summaryList.innerHTML += `
                     <div style="background: rgba(0,0,0,0.25); padding: 10px; margin-bottom: 6px; border-radius: 6px; border-left: 4px solid var(--accent);">
                         <strong style="color: #fff; font-size: 1.05rem;">${getFlag(c)} ${c}</strong><br>
-                        <span style="color: var(--text-sub); font-size: 0.85rem;">停留：${stat.totalDays}天 | 排名平均：${avgRank} | 造訪城市：${cityCount}</span>
-                    </div>`;
-            });
-            Object.keys(countriesData).sort((a,b) => countriesData[b].totalDays - countriesData[a].totalDays).forEach(c => {
-                const stat = countriesData[c]; const avgRank = (stat.totalRank / stat.visits).toFixed(1);
-                summaryList.innerHTML += `
-                    <div style="background: rgba(0,0,0,0.25); padding: 10px; margin-bottom: 6px; border-radius: 6px; border-left: 4px solid var(--accent);">
-                        <strong style="color: #fff; font-size: 1.05rem;">${getFlag(c)} ${c}</strong><br>
-                        <span style="color: var(--text-sub); font-size: 0.85rem;">停留：${stat.totalDays}天 | 排名平均：${avgRank} | 造訪次數：${stat.visits}</span>
+                        <span style="color: var(--text-sub); font-size: 0.85rem;">停留：${stat.totalDays}天 | 排名平均：${avgRank} | 造訪城市：${countryCities}</span>
                     </div>`;
             });
 
@@ -526,7 +514,7 @@
             });
 
             document.getElementById('count-country').innerText = Object.keys(countriesData).length;
-            document.getElementById('count-region').innerText = locations.length;
+            document.getElementById('count-region').innerText = uniqueCities.size; // 👉 使用不重複城市Set算出總數
         }
 
         ['search-log', 'filter-year', 'filter-continent', 'sort-by'].forEach(id => {
@@ -653,7 +641,7 @@
             }
         };
 
-        // --- Bulk Upsert JSON 匯入邏輯 ---
+        // --- Bulk Upsert JSON 匯入邏輯 (⚠️ 內建換日線最短路徑修正與距離等速引擎) ---
         window.importData = function(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -668,18 +656,26 @@
                         btn.innerText = '☁️ 雲端洗入中...';
                         btn.disabled = true;
 
-                        const supabasePayload = importedData.map(loc => ({
-                            id: loc.id,
-                            date_start: loc.dateStart || '',
-                            date_end: loc.dateEnd || '',
-                            date_range: loc.dateRange || '',
-                            country: loc.country,
-                            region: loc.region,
-                            ranking: loc.ranking || loc.rating || 10,
-                            lat: loc.lat,
-                            lng: loc.lng,
-                            geojson: loc.geojson
-                        }));
+                        const supabasePayload = importedData.map(loc => {
+                            let lngDiff = loc.lng - (importedData[0]?.lng || loc.lng);
+                            // 👉 核心：國際換日線最短路徑修正
+                            if (lngDiff > 180) lngDiff -= 360;
+                            else if (lngDiff < -180) lngDiff += 360;
+                            const correctedLng = (importedData[0]?.lng || loc.lng) + lngDiff;
+
+                            return {
+                                id: loc.id,
+                                date_start: loc.dateStart || '',
+                                date_end: loc.dateEnd || '',
+                                date_range: loc.dateRange || '',
+                                country: loc.country,
+                                region: loc.region,
+                                ranking: loc.ranking || loc.rating || 10,
+                                lat: loc.lat,
+                                lng: correctedLng, // 使用修正後的經度防止跑偏
+                                geojson: loc.geojson
+                            }
+                        });
 
                         const { error } = await supabaseClient.from('travel_logs').upsert(supabasePayload);
                         
@@ -721,32 +717,30 @@
         };
 
         window.playTimeline = async function() {
-            // 確保有經緯度，且依據起始日期排序
             const validLocs = [...locations].filter(l => l.lat && l.lng && extractYear(l)).sort((a,b) => {
                 const ta = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
                 const tb = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
                 return ta - tb;
             });
             if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
-            
             switchMode('region'); regionLayerGroup.clearLayers();
             const btn = document.querySelector('button[onclick="playTimeline()"]');
             btn.innerText = '推演中... ⏳'; btn.disabled = true;
 
-            const pathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.8 }).addTo(regionLayerGroup);
+            const finalPathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.8 }).addTo(regionLayerGroup);
+            const animatingPathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.5, weight: 2 }).addTo(regionLayerGroup);
             const personIcon = L.divIcon({ 
                 html: '<div style="font-size: 26px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); transform: scaleX(-1);">🚶‍♂️</div>', 
                 className: '', iconSize: [26, 26], iconAnchor: [13, 26] 
             });
-            
             let movingMarker = null;
-            let completedPath = []; // 👉 獨立維護歷史軌跡陣列，徹底鎖死解決跑偏 Bug
 
             function animateMovement(startCoords, endCoords, duration) {
                 return new Promise(resolve => {
                     const startTime = performance.now();
+                    
                     let lngDiff = endCoords[1] - startCoords[1];
-                    // 處理跨越國際換日線，確保走最短路徑
+                    // 👉 核心：國際換日線最短路徑修正
                     if (lngDiff > 180) lngDiff -= 360;
                     else if (lngDiff < -180) lngDiff += 360;
 
@@ -756,14 +750,11 @@
                         let currentLng = startCoords[1] + lngDiff * progress;
                         
                         movingMarker.setLatLng([currentLat, currentLng]);
-                        // 動態拉線：固定的歷史軌跡 + 小人當前的位置
-                        pathLine.setLatLngs([...completedPath, [currentLat, currentLng]]);
+                        // 只更新動畫中的短線 (連線出發點到小人當前位置)
+                        animatingPathLine.setLatLngs([startCoords, [currentLat, currentLng]]);
                         
-                        if (progress < 1) {
-                            requestAnimationFrame(step);
-                        } else {
-                            resolve();
-                        }
+                        if (progress < 1) requestAnimationFrame(step);
+                        else resolve();
                     }
                     requestAnimationFrame(step);
                 });
@@ -776,39 +767,38 @@
                 if (i === 0) {
                     mapMain.flyTo(currentCoords, 5, { duration: 1.5 });
                     movingMarker = L.marker(currentCoords, {icon: personIcon}).addTo(regionLayerGroup);
-                    completedPath.push(currentCoords);
-                    pathLine.setLatLngs(completedPath);
+                    finalPathLine.addLatLng(currentCoords);
                     await new Promise(r => setTimeout(r, 1500)); 
                 } else {
                     const prevLoc = validLocs[i - 1];
                     const prevCoords = [prevLoc.lat, prevLoc.lng];
                     
-                    // 👉 距離等速測算引擎 (Turf.js 接受的座標格式是 [lng, lat])
+                    // 👉 距離等速引擎 (公里測算)
                     const distKm = turf.distance(turf.point([prevCoords[1], prevCoords[0]]), turf.point([currentCoords[1], currentCoords[0]]));
                     
-                    // 設定等速移動：每秒走 2500 公里。鎖定極限時間 (最快1秒，最慢4.5秒)
+                    // 設定恆定速率：每秒 2500 公里。限制最快 1秒，最慢 4秒。
                     let moveDuration = (distKm / 2500) * 1000; 
-                    moveDuration = Math.max(1000, Math.min(moveDuration, 4500));
+                    moveDuration = Math.max(1000, Math.min(moveDuration, 4000));
                     
                     mapMain.flyTo(currentCoords, 5, { duration: moveDuration / 1000 });
                     await animateMovement(prevCoords, currentCoords, moveDuration);
                     
-                    // 抵達後將此點正式鎖入完成軌跡
-                    completedPath.push(currentCoords);
-                    pathLine.setLatLngs(completedPath);
+                    animatingPathLine.setLatLngs([]); 
+                    finalPathLine.addLatLng(currentCoords); // 移動結束，鎖入歷史恆定軌跡
                 }
                 
                 L.circleMarker(currentCoords, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
                  .bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`)
                  .addTo(regionLayerGroup).openPopup();
                 
-                await new Promise(r => setTimeout(r, 1000)); // 每個點停留檢視時間
+                await new Promise(r => setTimeout(r, 1200)); 
             }
             
             alert('✅ 戰略推演完畢！');
             btn.innerText = '▶️ 軌跡推演'; btn.disabled = false;
             renderMapRegions(); 
         };
+
         window.recommendNext = function() {
             if (locations.length === 0) return alert('請先輸入戰報，AI 才能分析偏好！');
             const continentRankings = {};
