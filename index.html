@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌍 頂級戰略旅遊指揮中心</title>
+    <title>🌍 旅遊紀錄</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
@@ -105,7 +105,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖據點總數</div>
+                <div class="stat-label">解鎖城市/省分</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
             <div class="stat-card">
@@ -113,6 +113,17 @@
                 <div class="stat-number" id="exposure-continent" style="color: var(--rating);">0.00</div>
                 <div class="sub-text" id="exposure-country">評估中...</div>
             </div>
+            <div class="stats-grid">
+            </div>
+
+        <div class="chart-wrapper">
+            <div class="chart-container"><canvas id="annualChart"></canvas></div>
+            <div class="chart-container"><canvas id="continentPieChart"></canvas></div>
+        </div>
+        <div class="view-toggle">
+            <div class="data-controls">
+                <button class="btn-data" onclick="syncToGitHub()">☁️ GitHub 雲端同步</button>
+                ```
         </div>
 
         <div class="view-toggle">
@@ -409,7 +420,15 @@
             const filterContinent = document.getElementById('filter-continent')?.value || 'all';
             const sortBy = document.getElementById('sort-by')?.value || 'date';
 
-            const years = new Set(locations.map(loc => loc.dateStart ? loc.dateStart.substring(0, 4) : null).filter(y => y !== null));
+            const years = new Set(locations.map(loc => {
+                if (loc.dateStart) return loc.dateStart.substring(0, 4);
+                if (loc.dateRange) {
+                    const match = loc.dateRange.match(/\d{4}/);
+                    if (match) return match[0];
+                }
+                return null;
+            }).filter(y => y !== null));
+
             const yearSelect = document.getElementById('filter-year');
             if (yearSelect) {
                 const currentSelection = yearSelect.value;
@@ -425,7 +444,16 @@
                 const c = (loc.country || '').toLowerCase();
                 const r = (loc.region || '').toLowerCase();
                 const locContinent = getContinent(loc.country);
-                const locYear = loc.dateStart ? loc.dateStart.substring(0, 4) : 'none';
+                
+                // 👉 向下相容：過濾時匹配舊資料年份
+                let locYear = 'none';
+                if (loc.dateStart) {
+                    locYear = loc.dateStart.substring(0, 4);
+                } else if (loc.dateRange) {
+                    const match = loc.dateRange.match(/\d{4}/);
+                    if (match) locYear = match[0];
+                }
+
                 return (c.includes(searchKeyword) || r.includes(searchKeyword)) && (filterYear === 'all' || locYear === filterYear) && (filterContinent === 'all' || locContinent === filterContinent);
             });
 
@@ -475,8 +503,10 @@
 
             const sortedLocations = [...filteredLocations].sort((a, b) => {
                 if (sortBy === 'rank') return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
-                if(a.dateStart && b.dateStart) return new Date(b.dateStart) - new Date(a.dateStart);
-                return b.id - a.id;
+                
+                const timeA = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
+                const timeB = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
+                return timeB - timeA;
             });
 
             sortedLocations.forEach(loc => {
