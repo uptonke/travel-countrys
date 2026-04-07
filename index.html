@@ -9,6 +9,8 @@
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
     <style>
         :root {
@@ -117,24 +119,25 @@
         </div>
 
         <div class="chart-wrapper">
-            <div class="chart-container">
-                <canvas id="annualChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="continentPieChart"></canvas>
+            <div class="chart-container"><canvas id="annualChart"></canvas></div>
+            <div class="chart-container"><canvas id="continentPieChart"></canvas></div>
+            <div class="chart-container" style="grid-column: 1 / -1; height: 200px;">
+                <canvas id="ganttChart"></canvas>
             </div>
         </div>
 
         <div class="view-toggle">
             <div class="data-controls">
-                <button class="btn-data" onclick="exportData('json')">💾 備份 </button>
+                <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
                 <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV</button>
                 <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入 JSON</button>
                 <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
             </div>
-            <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家版圖</button>
+            <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家板塊</button>
             <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：據點標示</button>
             <button id="btn-mode-heat" onclick="switchMode('heat')">🔥 C面：權重熱區</button>
+            <button onclick="playTimeline()" style="border-color: var(--rating); color: var(--rating);">▶️ 軌跡推演</button>
+            <button onclick="recommendNext()" style="background-color: var(--accent); color: var(--bg-color); border: none;">🤖 AI 戰略預測</button>
         </div>
 
         <div class="map-container">
@@ -202,7 +205,9 @@
     </div>
 
     <script>
-        // --- 核心變數 ---
+        let chartGantt = null; // 甘特圖實例
+        const flagMap = { "japan": "🇯🇵", "taiwan": "🇹🇼", "united kingdom": "🇬🇧", "united states of america": "🇺🇸", "thailand": "🇹🇭", "malaysia": "🇲🇾", "china": "🇨🇳", "south korea": "🇰🇷", "france": "🇫🇷", "germany": "🇩🇪", "italy": "🇮🇹", "spain": "🇪🇸", "indonesia": "🇮🇩", "vietnam": "🇻🇳", "singapore": "🇸🇬", "australia": "🇦🇺", "switzerland": "🇨🇭" };
+        function getFlag(c) { return flagMap[(c||'').toLowerCase()] || "📍"; }
         const EARTH_LAND_AREA_KM2 = 148940000;
         let currentMode = 'country';
         let worldGeoJSON = null; 
@@ -376,21 +381,66 @@
                     }
                 }
             });
+            const ctxGantt = document.getElementById('ganttChart').getContext('2d');
+            const validLocs = [...filteredLocs].filter(l => l.dateStart && l.dateEnd).sort((a,b) => new Date(a.dateStart) - new Date(b.dateStart));
+            
+            if(chartGantt) chartGantt.destroy();
+            chartGantt = new Chart(ctxGantt, {
+                type: 'bar',
+                data: {
+                    labels: validLocs.map(l => l.region),
+                    datasets: [{
+                        label: '出征期間',
+                        data: validLocs.map(l => [new Date(l.dateStart).getTime(), new Date(l.dateEnd).getTime()]),
+                        backgroundColor: varCSS('--accent'),
+                        barPercentage: 0.5, borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // 橫向長條圖
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, title: { display: true, text: '📅 戰略甘特圖', color: varCSS('--text-main') } },
+                    scales: {
+                        x: { type: 'time', time: { unit: 'month' }, ticks: { color: varCSS('--text-sub') }, grid: { color: '#334155' } },
+                        y: { ticks: { color: varCSS('--text-sub') }, grid: { display: false } }
+                    }
+                }
+            });
         }
 
         function renderMapCountries() {
             if (!worldGeoJSON) return;
             countryLayerGroup.clearLayers();
-            const visitedCountries = new Set(locations.map(loc => (loc.country || '').toLowerCase()));
+            
+            // 預算各國總停留天數
+            const countryDaysMap = {};
+            locations.forEach(loc => {
+                const cName = (loc.country || '').toLowerCase();
+                countryDaysMap[cName] = (countryDaysMap[cName] || 0) + calculateDays(loc.dateStart, loc.dateEnd);
+            });
+            const maxDays = Math.max(...Object.values(countryDaysMap), 1); // 找出最大天數當基準
+
             let totalExploredAreaKm2 = 0;
 
             L.geoJSON(worldGeoJSON, {
                 style: (feature) => {
                     const countryName = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
-                    const isVisited = visitedCountries.has(countryName);
+                    const days = countryDaysMap[countryName] || 0;
+                    const isVisited = days > 0;
+                    
                     if (isVisited) totalExploredAreaKm2 += getCountryArea(feature);
 
-                    return { fillColor: isVisited ? varCSS('--country-filled') : varCSS('--country-default'), weight: 1, color: varCSS('--country-border'), fillOpacity: isVisited ? 0.6 : 0.3 };
+                    // 👉 動態顏色分級：天數越多，顏色越深越不透明
+                    let fillColor = varCSS('--country-default');
+                    let fillOpacity = 0.2;
+                    if (isVisited) {
+                        fillOpacity = 0.4 + (0.5 * (days / maxDays)); // 透明度 0.4 ~ 0.9
+                        if (days > 14) fillColor = '#166534'; // 待超久：深綠
+                        else if (days > 5) fillColor = '#22c55e'; // 中等：標準綠
+                        else fillColor = '#4ade80'; // 快閃：淺綠
+                    }
+
+                    return { fillColor: fillColor, weight: 1, color: varCSS('--country-border'), fillOpacity: fillOpacity };
                 }
             }).addTo(countryLayerGroup);
 
@@ -398,7 +448,6 @@
             document.getElementById('explore-percent').innerText = `${percent}%`;
             document.getElementById('explore-area').innerText = `${Math.round(totalExploredAreaKm2).toLocaleString()} km² / 1.48億 km²`;
         }
-
         function renderMapRegions() {
             regionLayerGroup.clearLayers();
             locations.forEach(loc => {
@@ -465,7 +514,7 @@
                 li.innerHTML = `
                     <div style="display: flex; flex-direction: column; gap: 0.5rem; flex: 1;">
                         <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
-                            <span class="badge-country">${loc.country}</span>
+                            <span class="badge-country">${getFlag(loc.country)} ${loc.country}</span>
                             <span style="color: var(--text-main); font-weight: bold;">${loc.region}</span>
                             <span class="score-badge">🏆 No.${loc.ranking}</span>
                             <span class="days-badge">${days} 天</span>
@@ -717,6 +766,64 @@
             };
             reader.readAsText(file);
             event.target.value = '';
+            // --- 🎬 時間軸推演動畫 ---
+        window.playTimeline = async function() {
+            const validLocs = [...locations].filter(l => l.lat && l.lng && l.dateStart).sort((a,b) => new Date(a.dateStart) - new Date(b.dateStart));
+            if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
+            
+            switchMode('region');
+            regionLayerGroup.clearLayers(); // 清空圖面準備推演
+            
+            // 禁用按鈕防呆
+            const btn = document.querySelector('button[onclick="playTimeline()"]');
+            btn.innerText = '推演中... ⏳'; btn.disabled = true;
+
+            for (let i = 0; i < validLocs.length; i++) {
+                const loc = validLocs[i];
+                mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 1.2 });
+                
+                L.circleMarker([loc.lat, loc.lng], { 
+                    color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 
+                }).bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateStart}`).addTo(regionLayerGroup).openPopup();
+                
+                await new Promise(r => setTimeout(r, 1800)); // 每個點停留 1.8 秒
+            }
+            
+            alert('✅ 戰略推演完畢！');
+            btn.innerText = '▶️ 軌跡推演'; btn.disabled = false;
+            renderMapRegions(); // 恢復完整圖面
+        };
+
+        // --- 🤖 AI 戰略推薦引擎 ---
+        window.recommendNext = function() {
+            if (locations.length === 0) return alert('請先輸入幾筆戰報，AI 才能分析你的 Vibe 偏好！');
+            
+            // 1. 找出你 Vibe 排名最靠前的洲別
+            const continentRankings = {};
+            locations.forEach(l => {
+                const cont = getContinent(l.country);
+                if (!continentRankings[cont]) continentRankings[cont] = [];
+                continentRankings[cont].push(parseInt(l.ranking) || 10);
+            });
+            
+            let bestContinent = 'Europe';
+            let bestAvgRank = 99;
+            for (const [cont, ranks] of Object.entries(continentRankings)) {
+                if (cont === 'Other') continue;
+                const avg = ranks.reduce((a,b)=>a+b,0) / ranks.length;
+                if (avg < bestAvgRank) { bestAvgRank = avg; bestContinent = cont; }
+            }
+
+            // 2. 針對該洲，找出你還沒去過的「高潛力」標的
+            const visited = new Set(locations.map(l => standardizeCountry(l.country).toLowerCase()));
+            const targetPool = continentMapping[bestContinent].filter(c => !visited.has(c));
+            
+            if (targetPool.length === 0) return alert(`🗺️ 太強了！你在 ${bestContinent} 已經沒有常見的戰略盲區，建議將目光轉向新興板塊！`);
+            
+            const recommendation = targetPool[Math.floor(Math.random() * targetPool.length)].toUpperCase();
+            
+            alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${bestContinent}】獲得的高排名 (Avg Rank: ${bestAvgRank.toFixed(1)}) 比例極高。\n\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlag(recommendation)} ${recommendation} 】`);
+        };
         };
 
         renderUI();
