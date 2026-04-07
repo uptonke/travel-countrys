@@ -9,8 +9,7 @@
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    
+        
     <style>
         :root {
             --bg-color: #0f172a; --panel-bg: #1e293b; --text-main: #f8fafc; --text-sub: #94a3b8;
@@ -114,12 +113,6 @@
                 <div class="stat-number" id="exposure-continent" style="color: var(--rating);">0.00</div>
                 <div class="sub-text" id="exposure-country">評估中...</div>
             </div>
-        </div>
-
-        <div class="chart-wrapper">
-            <div class="chart-container"><canvas id="annualChart"></canvas></div>
-            <div class="chart-container"><canvas id="continentPieChart"></canvas></div>
-            <div class="chart-container" style="grid-column: 1 / -1; height: 220px;"><canvas id="ganttChart"></canvas></div>
         </div>
 
         <div class="view-toggle">
@@ -402,39 +395,6 @@
                 type: 'doughnut',
                 data: { labels: contLabels, datasets: [{ data: contData, backgroundColor: ['#38bdf8', '#22c55e', '#fbbf24', '#f43f5e', '#a855f7', '#64748b'], borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: varCSS('--text-sub') } }, title: { display: true, text: '🌍 洲別分布', color: varCSS('--text-main'), font: { size: 16 } } } }
-            });
-
-            // 👉 甘特圖 (防呆：過濾無效的 1970 年問題)
-            const ctxGantt = document.getElementById('ganttChart').getContext('2d');
-            const validGanttLocs = [...filteredLocs].filter(l => l.dateStart && l.dateEnd && new Date(l.dateStart).getTime() > 0 && new Date(l.dateEnd).getTime() > 0).sort((a,b) => new Date(a.dateStart) - new Date(b.dateStart));
-            
-            let minX = Date.now(), maxX = 0;
-            validGanttLocs.forEach(l => {
-                const t1 = new Date(l.dateStart).getTime(); const t2 = new Date(l.dateEnd).getTime();
-                if(t1 < minX) minX = t1; if(t2 > maxX) maxX = t2;
-            });
-            const buffer = 30 * 86400000; // 前後加 1 個月緩衝
-            minX -= buffer; maxX += buffer;
-
-            if(chartGantt) chartGantt.destroy();
-            chartGantt = new Chart(ctxGantt, {
-                type: 'bar',
-                data: {
-                    labels: validGanttLocs.map(l => l.region),
-                    datasets: [{
-                        label: '出征期間',
-                        data: validGanttLocs.map(l => [new Date(l.dateStart).getTime(), new Date(l.dateEnd).getTime()]),
-                        backgroundColor: varCSS('--accent'), barPercentage: 0.5, borderRadius: 4
-                    }]
-                },
-                options: {
-                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, title: { display: true, text: '📅 戰略甘特圖', color: varCSS('--text-main') } },
-                    scales: {
-                        x: { type: 'time', time: { unit: 'month' }, min: minX, max: maxX, ticks: { color: varCSS('--text-sub') }, grid: { color: '#334155' } },
-                        y: { ticks: { color: varCSS('--text-sub') }, grid: { display: false } }
-                    }
-                }
             });
         }
 
