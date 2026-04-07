@@ -740,35 +740,67 @@
             });
             let movingMarker = null;
 
+            // 👉 核心：逐幀補間動畫引擎 (Frame-by-Frame Interpolation)
+            function animateMovement(startCoords, endCoords, duration) {
+                return new Promise(resolve => {
+                    const startTime = performance.now();
+                    const baseLatLngs = pathLine.getLatLngs(); // 記下出發前所有已固定的軌跡點
+                    
+                    // 修正跨越國際換日線的最短路徑 (避免繞地球一圈)
+                    let lngDiff = endCoords[1] - startCoords[1];
+                    if (lngDiff > 180) lngDiff -= 360;
+                    else if (lngDiff < -180) lngDiff += 360;
+
+                    function step(currentTime) {
+                        let progress = Math.min((currentTime - startTime) / duration, 1);
+                        
+                        // 計算當前這一幀的精確經緯度 (Easing Linear)
+                        let currentLat = startCoords[0] + (endCoords[0] - startCoords[0]) * progress;
+                        let currentLng = startCoords[1] + lngDiff * progress;
+                        
+                        // 更新小人位置
+                        movingMarker.setLatLng([currentLat, currentLng]);
+                        
+                        // 動態「畫」出軌跡線：原本固定的點 + 小人當前的位置
+                        pathLine.setLatLngs([...baseLatLngs, [currentLat, currentLng]]);
+                        
+                        if (progress < 1) requestAnimationFrame(step); // 請求下一幀
+                        else resolve(); // 動畫結束
+                    }
+                    requestAnimationFrame(step);
+                });
+            }
+
             for (let i = 0; i < validLocs.length; i++) {
                 const loc = validLocs[i];
+                const currentCoords = [loc.lat, loc.lng];
                 
-                // 1. 放慢運鏡速度 (duration: 2.5秒)
-                mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 2.5 });
-                
-                // 2. 畫線與移動小人
-                pathLine.addLatLng([loc.lat, loc.lng]);
-                if (!movingMarker) {
-                    movingMarker = L.marker([loc.lat, loc.lng], {icon: personIcon}).addTo(regionLayerGroup);
-                } else {
-                    movingMarker.setLatLng([loc.lat, loc.lng]);
-                }
+                // 1. 視角平滑飛向目的地 (耗時 2.5 秒)
+                mapMain.flyTo(currentCoords, 5, { duration: 2.5 });
 
-                // 配合飛行時間進行非同步等待
-                await new Promise(r => setTimeout(r, 2600)); 
+                if (i === 0) {
+                    // 第一站：直接空降出發點
+                    movingMarker = L.marker(currentCoords, {icon: personIcon}).addTo(regionLayerGroup);
+                    pathLine.addLatLng(currentCoords);
+                    await new Promise(r => setTimeout(r, 2500)); 
+                } else {
+                    // 後續站點：讓小人沿著線「走」過去 (耗時 2.5 秒，與視角飛行同步)
+                    const prevLoc = validLocs[i - 1];
+                    await animateMovement([prevLoc.lat, prevLoc.lng], currentCoords, 2500);
+                }
                 
-                // 3. 抵達後點亮據點並彈出戰報
-                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
+                // 2. 抵達後點亮據點並彈出戰報
+                L.circleMarker(currentCoords, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
                  .bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`)
                  .addTo(regionLayerGroup).openPopup();
                 
-                // 停頓讓人檢視 (1.5秒)
-                await new Promise(r => setTimeout(r, 1500)); 
+                // 3. 停頓讓人檢視戰果 (1.2秒)
+                await new Promise(r => setTimeout(r, 1200)); 
             }
             
             alert('✅ 戰略推演完畢！');
             btn.innerText = '▶️ 軌跡推演'; btn.disabled = false;
-            renderMapRegions(); 
+            renderMapRegions(); // 恢復完整圖面
         };
 
         window.recommendNext = function() {
