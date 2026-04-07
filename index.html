@@ -656,26 +656,19 @@
                         btn.innerText = '☁️ 雲端洗入中...';
                         btn.disabled = true;
 
-                        const supabasePayload = importedData.map(loc => {
-                            let lngDiff = loc.lng - (importedData[0]?.lng || loc.lng);
-                            // 👉 核心：國際換日線最短路徑修正
-                            if (lngDiff > 180) lngDiff -= 360;
-                            else if (lngDiff < -180) lngDiff += 360;
-                            const correctedLng = (importedData[0]?.lng || loc.lng) + lngDiff;
-
-                            return {
-                                id: loc.id,
-                                date_start: loc.dateStart || '',
-                                date_end: loc.dateEnd || '',
-                                date_range: loc.dateRange || '',
-                                country: loc.country,
-                                region: loc.region,
-                                ranking: loc.ranking || loc.rating || 10,
-                                lat: loc.lat,
-                                lng: correctedLng, // 使用修正後的經度防止跑偏
-                                geojson: loc.geojson
-                            }
-                        });
+                        // 👉 取消經緯度竄改，忠實洗入原版 JSON
+                        const supabasePayload = importedData.map(loc => ({
+                            id: loc.id,
+                            date_start: loc.dateStart || '',
+                            date_end: loc.dateEnd || '',
+                            date_range: loc.dateRange || '',
+                            country: loc.country,
+                            region: loc.region,
+                            ranking: loc.ranking || loc.rating || 10,
+                            lat: loc.lat,
+                            lng: loc.lng, // 絕對保持原樣
+                            geojson: loc.geojson
+                        }));
 
                         const { error } = await supabaseClient.from('travel_logs').upsert(supabasePayload);
                         
@@ -723,38 +716,44 @@
                 return ta - tb;
             });
             if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
+            
             switchMode('region'); regionLayerGroup.clearLayers();
             const btn = document.querySelector('button[onclick="playTimeline()"]');
             btn.innerText = '推演中... ⏳'; btn.disabled = true;
 
-            const finalPathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.8 }).addTo(regionLayerGroup);
-            const animatingPathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.5, weight: 2 }).addTo(regionLayerGroup);
+            // 最終鎖定的軌跡線 (實線) 與 移動中的連線 (虛線)
+            const finalPathLine = L.polyline([], { color: '#fbbf24', weight: 3, opacity: 0.8 }).addTo(regionLayerGroup);
+            const animatingPathLine = L.polyline([], { color: '#fbbf24', weight: 3, dashArray: '5, 8', opacity: 0.9 }).addTo(regionLayerGroup);
             const personIcon = L.divIcon({ 
-                html: '<div style="font-size: 26px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); transform: scaleX(-1);">🚶‍♂️</div>', 
-                className: '', iconSize: [26, 26], iconAnchor: [13, 26] 
+                html: '<div style="font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); transform: scaleX(-1);">🚶‍♂️</div>', 
+                className: '', iconSize: [28, 28], iconAnchor: [14, 28] 
             });
+            
             let movingMarker = null;
+            let completedPath = [];
+            let currentContinuousLng = null; // 👉 核心：連續經度追蹤器，徹底解決折返跑 Bug
 
             function animateMovement(startCoords, endCoords, duration) {
                 return new Promise(resolve => {
                     const startTime = performance.now();
-                    
-                    let lngDiff = endCoords[1] - startCoords[1];
-                    // 👉 核心：國際換日線最短路徑修正
-                    if (lngDiff > 180) lngDiff -= 360;
-                    else if (lngDiff < -180) lngDiff += 360;
-
                     function step(currentTime) {
                         let progress = Math.min((currentTime - startTime) / duration, 1);
-                        let currentLat = startCoords[0] + (endCoords[0] - startCoords[0]) * progress;
-                        let currentLng = startCoords[1] + lngDiff * progress;
+                        
+                        // 加入 Easing 讓移動更自然 (先快後慢)
+                        const easeOutQuad = progress * (2 - progress);
+
+                        let currentLat = startCoords[0] + (endCoords[0] - startCoords[0]) * easeOutQuad;
+                        let currentLng = startCoords[1] + (endCoords[1] - startCoords[1]) * easeOutQuad;
                         
                         movingMarker.setLatLng([currentLat, currentLng]);
-                        // 只更新動畫中的短線 (連線出發點到小人當前位置)
                         animatingPathLine.setLatLngs([startCoords, [currentLat, currentLng]]);
                         
-                        if (progress < 1) requestAnimationFrame(step);
-                        else resolve();
+                        if (progress < 1) {
+                            requestAnimationFrame(step);
+                        } else {
+                            animatingPathLine.setLatLngs([]); // 清除虛線
+                            resolve();
+                        }
                     }
                     requestAnimationFrame(step);
                 });
@@ -762,36 +761,48 @@
 
             for (let i = 0; i < validLocs.length; i++) {
                 const loc = validLocs[i];
-                const currentCoords = [loc.lat, loc.lng];
+                let targetLat = loc.lat;
+                let targetLng = loc.lng;
                 
                 if (i === 0) {
-                    mapMain.flyTo(currentCoords, 5, { duration: 1.5 });
-                    movingMarker = L.marker(currentCoords, {icon: personIcon}).addTo(regionLayerGroup);
-                    finalPathLine.addLatLng(currentCoords);
+                    currentContinuousLng = targetLng; // 基準點
+                    const startCoords = [targetLat, currentContinuousLng];
+                    
+                    mapMain.flyTo(startCoords, 5, { duration: 1.5 });
+                    movingMarker = L.marker(startCoords, {icon: personIcon}).addTo(regionLayerGroup);
+                    completedPath.push(startCoords);
+                    
                     await new Promise(r => setTimeout(r, 1500)); 
                 } else {
-                    const prevLoc = validLocs[i - 1];
-                    const prevCoords = [prevLoc.lat, prevLoc.lng];
+                    const prevCoords = completedPath[completedPath.length - 1];
                     
-                    // 👉 距離等速引擎 (公里測算)
-                    const distKm = turf.distance(turf.point([prevCoords[1], prevCoords[0]]), turf.point([currentCoords[1], currentCoords[0]]));
+                    // 👉 換日線突破演算法：計算最短平移經度
+                    let lngDiff = targetLng - (currentContinuousLng % 360);
+                    if (lngDiff > 180) lngDiff -= 360;
+                    else if (lngDiff < -180) lngDiff += 360;
                     
-                    // 設定恆定速率：每秒 2500 公里。限制最快 1秒，最慢 4秒。
-                    let moveDuration = (distKm / 2500) * 1000; 
-                    moveDuration = Math.max(1000, Math.min(moveDuration, 4000));
+                    currentContinuousLng += lngDiff;
+                    const nextCoords = [targetLat, currentContinuousLng];
                     
-                    mapMain.flyTo(currentCoords, 5, { duration: moveDuration / 1000 });
-                    await animateMovement(prevCoords, currentCoords, moveDuration);
+                    // 真實距離等速運算
+                    const distKm = turf.distance(turf.point([prevCoords[1], prevCoords[0]]), turf.point([targetLng, targetLat]));
+                    let moveDuration = (distKm / 2000) * 1000; // 每秒 2000 公里
+                    moveDuration = Math.max(1200, Math.min(moveDuration, 4000)); // 限制在 1.2秒 ~ 4秒 之間
                     
-                    animatingPathLine.setLatLngs([]); 
-                    finalPathLine.addLatLng(currentCoords); // 移動結束，鎖入歷史恆定軌跡
+                    // 鏡頭與小人同步平移
+                    mapMain.flyTo([targetLat, currentContinuousLng], 4, { duration: moveDuration / 1000 });
+                    await animateMovement(prevCoords, nextCoords, moveDuration);
+                    
+                    completedPath.push(nextCoords);
+                    finalPathLine.setLatLngs(completedPath); // 鎖死真實軌跡
                 }
                 
-                L.circleMarker(currentCoords, { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
+                // 抵達後點亮據點
+                L.circleMarker([targetLat, currentContinuousLng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
                  .bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`)
                  .addTo(regionLayerGroup).openPopup();
                 
-                await new Promise(r => setTimeout(r, 1200)); 
+                await new Promise(r => setTimeout(r, 1000)); 
             }
             
             alert('✅ 戰略推演完畢！');
