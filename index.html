@@ -8,8 +8,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
         :root {
@@ -105,7 +105,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖城市/省分</div>
+                <div class="stat-label">解鎖據點總數</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
             <div class="stat-card">
@@ -122,15 +122,14 @@
 
         <div class="view-toggle">
             <div class="data-controls">
-                <button class="btn-data" onclick="syncToGitHub()">☁️ GitHub 雲端同步</button>
                 <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
                 <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV</button>
-                <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入 JSON</button>
+                <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入舊版 JSON</button>
                 <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importData(event)">
             </div>
             
             <button id="btn-mode-country" class="active" onclick="switchMode('country')">🗺️ A面：國家板塊</button>
-            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：解鎖城市/省分標示</button>
+            <button id="btn-mode-region" onclick="switchMode('region')">💠 B面：據點標示</button>
             <button id="btn-mode-heat" onclick="switchMode('heat')">🔥 C面：權重熱區</button>
             
             <button onclick="playTimeline()" style="border-color: var(--rating); color: var(--rating);">▶️ 軌跡推演</button>
@@ -203,11 +202,10 @@
 
     <script>
         // ==========================================
-        // 1. SUPABASE 初始化設定 (請填入你的金鑰)
+        // 1. SUPABASE 初始化設定 (⚠️ 請務必換成你的金鑰)
         // ==========================================
-        const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
+         const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
         const supabaseKey = 'sb_publishable_lDfwRDxgMhzRwVk0-Qu3vg_9HTmTFZy';
-        // 👉 修正點：變數改名為 supabaseClient，避免與官方全域變數 supabase 衝突
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         // ==========================================
@@ -219,11 +217,11 @@
         let countryAreaCache = {};
         let locations = [];
         let editingId = null;
-        let chartBar = null; let chartPie = null;
+        let chartBar = null; 
+        let chartPie = null;
 
         // 啟動時從 Supabase 抓取資料
         async function initApp() {
-            // 👉 修正點：使用 supabaseClient
             const { data, error } = await supabaseClient.from('travel_logs').select('*');
             if (error) {
                 console.error("Supabase 讀取失敗:", error);
@@ -304,7 +302,7 @@
                 const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => {
                     const days = calculateDays(loc.dateStart, loc.dateEnd);
                     const rank = parseInt(loc.ranking) || 10;
-                    return [loc.lat, loc.lng, days * (1 / rank)];
+                    return [loc.lat, loc.lng, days * (1 / rank)]; // 權重演算法
                 });
                 heatLayerGroup = L.heatLayer(heatPoints, { radius: 35, blur: 20, max: 15, maxZoom: 6, gradient: {0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'} }).addTo(mapMain);
             }
@@ -492,7 +490,7 @@
         }
 
         // ==========================================
-        // 5. 互動邏輯 (Supabase 寫入與編輯)
+        // 5. 互動邏輯 (Supabase 寫入與匯入)
         // ==========================================
         const regionInput = document.getElementById('input-region'); const countryInput = document.getElementById('input-country');
         const autocompleteList = document.getElementById('autocomplete-list'); let debounceTimer;
@@ -559,7 +557,6 @@
                 lat: geoData.lat, lng: geoData.lng, geojson: geoData.geojson
             };
 
-            // 👉 修正點：使用 supabaseClient
             const { error } = await supabaseClient.from('travel_logs').upsert([newLog]);
             
             if (error) {
@@ -596,7 +593,6 @@
 
         window.deleteLocation = async function(id) {
             if(!confirm('確定要刪除這筆戰報嗎？')) return;
-            // 👉 修正點：使用 supabaseClient
             const { error } = await supabaseClient.from('travel_logs').delete().eq('id', id);
             if (error) {
                 alert(`❌ 刪除失敗: ${error.message}`);
@@ -605,6 +601,58 @@
                 if (editingId === id) cancelEdit(); 
                 renderAll();
             }
+        };
+
+        // --- Bulk Upsert JSON 匯入邏輯 ---
+        window.importData = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        const btn = document.querySelector('button[onclick="document.getElementById(\'import-file\').click()"]');
+                        const originalText = btn.innerText;
+                        btn.innerText = '☁️ 雲端洗入中...';
+                        btn.disabled = true;
+
+                        const supabasePayload = importedData.map(loc => ({
+                            id: loc.id,
+                            date_start: loc.dateStart || '',
+                            date_end: loc.dateEnd || '',
+                            date_range: loc.dateRange || '',
+                            country: loc.country,
+                            region: loc.region,
+                            ranking: loc.ranking || loc.rating || 10,
+                            lat: loc.lat,
+                            lng: loc.lng,
+                            geojson: loc.geojson
+                        }));
+
+                        const { error } = await supabaseClient.from('travel_logs').upsert(supabasePayload);
+                        
+                        if (error) {
+                            alert(`❌ 匯入雲端失敗: ${error.message}`);
+                        } else {
+                            locations = importedData;
+                            renderAll();
+                            alert(`✅ 完美轉移！成功將 ${importedData.length} 筆戰報洗入 Supabase 雲端資料庫。`);
+                        }
+                        
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                    } else {
+                        alert("⚠️ JSON 格式有誤，必須是陣列格式。");
+                    }
+                } catch (err) { 
+                    console.error(err);
+                    alert("⚠️ 檔案解析失敗"); 
+                }
+            };
+            reader.readAsText(file); 
+            event.target.value = ''; 
         };
 
         window.exportData = function(type) {
@@ -620,51 +668,54 @@
             const blob = new Blob([dataStr], { type: mimeType }); const url = URL.createObjectURL(blob);
             const a = document.createElement("a"); a.href = url; a.download = `travel_campaign_log.${extension}`;
             a.click(); URL.revokeObjectURL(url);
-        window.importData = function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            
-            reader.onload = async function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (Array.isArray(importedData)) {
-                        // 1. 將舊版 JSON 的駝峰命名 (camelCase) 轉換為 Supabase 資料表的蛇形命名 (snake_case)
-                        const supabasePayload = importedData.map(loc => ({
-                            id: loc.id,
-                            date_start: loc.dateStart || '',
-                            date_end: loc.dateEnd || '',
-                            date_range: loc.dateRange || '',
-                            country: loc.country,
-                            region: loc.region,
-                            ranking: loc.ranking || loc.rating || 10, // 向下相容極舊版的 rating
-                            lat: loc.lat,
-                            lng: loc.lng,
-                            geojson: loc.geojson
-                        }));
-
-                        // 2. 執行大批次寫入 (直接整包 Array 送給 Supabase)
-                        const { error } = await supabaseClient.from('travel_logs').upsert(supabasePayload);
-                        
-                        if (error) {
-                            alert(`❌ 匯入雲端失敗: ${error.message}`);
-                        } else {
-                            // 3. 寫入成功，強制刷新本地記憶體並重繪畫面
-                            locations = importedData;
-                            renderAll();
-                            alert(`✅ 完美轉移！成功將 ${importedData.length} 筆戰報洗入 Supabase 雲端資料庫。`);
-                        }
-                    } else {
-                        alert("⚠️ JSON 格式有誤，必須是陣列格式。");
-                    }
-                } catch (err) { 
-                    console.error(err);
-                    alert("⚠️ 檔案解析失敗"); 
-                }
-            };
-            reader.readAsText(file); 
-            event.target.value = ''; // 清除 input value 讓下次可以選同一個檔案
         };
+
+        window.playTimeline = async function() {
+            const validLocs = [...locations].filter(l => l.lat && l.lng && extractYear(l)).sort((a,b) => {
+                const ta = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
+                const tb = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
+                return ta - tb;
+            });
+            if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
+            switchMode('region'); regionLayerGroup.clearLayers();
+            const btn = document.querySelector('button[onclick="playTimeline()"]');
+            btn.innerText = '推演中... ⏳'; btn.disabled = true;
+
+            for (let i = 0; i < validLocs.length; i++) {
+                const loc = validLocs[i];
+                mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 1.2 });
+                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 }).bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`).addTo(regionLayerGroup).openPopup();
+                await new Promise(r => setTimeout(r, 1800)); 
+            }
+            alert('✅ 戰略推演完畢！');
+            btn.innerText = '▶️ 軌跡推演'; btn.disabled = false;
+            renderMapRegions(); 
+        };
+
+        window.recommendNext = function() {
+            if (locations.length === 0) return alert('請先輸入戰報，AI 才能分析偏好！');
+            const continentRankings = {};
+            locations.forEach(l => {
+                const cont = getContinent(l.country);
+                if (!continentRankings[cont]) continentRankings[cont] = [];
+                continentRankings[cont].push(parseInt(l.ranking) || 10);
+            });
+            let bestContinent = 'Europe'; let bestAvgRank = 99;
+            for (const [cont, ranks] of Object.entries(continentRankings)) {
+                if (cont === 'Other') continue;
+                const avg = ranks.reduce((a,b)=>a+b,0) / ranks.length;
+                if (avg < bestAvgRank) { bestAvgRank = avg; bestContinent = cont; }
+            }
+            const visited = new Set(locations.map(l => standardizeCountry(l.country).toLowerCase()));
+            const targetPool = continentMapping[bestContinent].filter(c => !visited.has(c));
+            if (targetPool.length === 0) return alert(`🗺️ 太強了！你在 ${bestContinent} 已經沒有常見戰略盲區，建議將目光轉向新興板塊！`);
+            const recommendation = targetPool[Math.floor(Math.random() * targetPool.length)].toUpperCase();
+            alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${bestContinent}】獲得的高排名比例極高。\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlag(recommendation)} ${recommendation} 】`);
+        };
+
+        // 啟動應用程式
+        initApp();
+
     </script>
 </body>
 </html>
