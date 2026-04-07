@@ -201,13 +201,14 @@
         </div>
     </div>
 
-     <script>
+    <script>
         // ==========================================
         // 1. SUPABASE 初始化設定 (請填入你的金鑰)
         // ==========================================
         const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
         const supabaseKey = 'sb_publishable_lDfwRDxgMhzRwVk0-Qu3vg_9HTmTFZy';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        // 👉 修正點：變數改名為 supabaseClient，避免與官方全域變數 supabase 衝突
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
         // ==========================================
         // 2. 核心變數與資料加載
@@ -222,11 +223,11 @@
 
         // 啟動時從 Supabase 抓取資料
         async function initApp() {
-            const { data, error } = await supabase.from('travel_logs').select('*');
+            // 👉 修正點：使用 supabaseClient
+            const { data, error } = await supabaseClient.from('travel_logs').select('*');
             if (error) {
                 console.error("Supabase 讀取失敗:", error);
             } else if (data) {
-                // 將資料庫的 snake_case 轉回前端用的 camelCase 結構
                 locations = data.map(d => ({
                     id: d.id, dateStart: d.date_start, dateEnd: d.date_end, dateRange: d.date_range,
                     country: d.country, region: d.region, ranking: d.ranking,
@@ -234,7 +235,6 @@
                 }));
             }
             
-            // 載入地圖邊界並渲染
             try {
                 const res = await fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson');
                 worldGeoJSON = await res.json();
@@ -304,7 +304,7 @@
                 const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => {
                     const days = calculateDays(loc.dateStart, loc.dateEnd);
                     const rank = parseInt(loc.ranking) || 10;
-                    return [loc.lat, loc.lng, days * (1 / rank)]; // 權重演算法
+                    return [loc.lat, loc.lng, days * (1 / rank)];
                 });
                 heatLayerGroup = L.heatLayer(heatPoints, { radius: 35, blur: 20, max: 15, maxZoom: 6, gradient: {0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'} }).addTo(mapMain);
             }
@@ -559,13 +559,12 @@
                 lat: geoData.lat, lng: geoData.lng, geojson: geoData.geojson
             };
 
-            // Supabase 寫入 (Upsert：有 ID 就更新，沒 ID 就新增)
-            const { error } = await supabase.from('travel_logs').upsert([newLog]);
+            // 👉 修正點：使用 supabaseClient
+            const { error } = await supabaseClient.from('travel_logs').upsert([newLog]);
             
             if (error) {
                 alert(`❌ 寫入 Supabase 失敗: ${error.message}`);
             } else {
-                // 更新本地端畫面
                 const locObj = { ...newLog, dateStart: dStart, dateEnd: dEnd, dateRange: dateRangeStr };
                 if (editingId) {
                     const idx = locations.findIndex(loc => loc.id === editingId);
@@ -597,8 +596,8 @@
 
         window.deleteLocation = async function(id) {
             if(!confirm('確定要刪除這筆戰報嗎？')) return;
-            // Supabase 刪除
-            const { error } = await supabase.from('travel_logs').delete().eq('id', id);
+            // 👉 修正點：使用 supabaseClient
+            const { error } = await supabaseClient.from('travel_logs').delete().eq('id', id);
             if (error) {
                 alert(`❌ 刪除失敗: ${error.message}`);
             } else {
@@ -606,6 +605,37 @@
                 if (editingId === id) cancelEdit(); 
                 renderAll();
             }
+        };
+
+        window.exportData = function(type) {
+            if (locations.length === 0) return alert("尚未佔領任何領地！");
+            let dataStr, mimeType, extension;
+            if (type === 'json') { dataStr = JSON.stringify(locations, null, 2); mimeType = "application/json"; extension = "json"; } 
+            else if (type === 'csv') {
+                const headers = ["id", "dateStart", "dateEnd", "country", "region", "ranking", "lat", "lng"];
+                const csvRows = [headers.join(",")];
+                locations.forEach(loc => csvRows.push(headers.map(header => `"${loc[header] || ''}"`).join(",")));
+                dataStr = csvRows.join("\n"); mimeType = "text/csv;charset=utf-8;"; extension = "csv";
+            }
+            const blob = new Blob([dataStr], { type: mimeType }); const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = `travel_campaign_log.${extension}`;
+            a.click(); URL.revokeObjectURL(url);
+        };
+
+        window.importData = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        // 如果要將 JSON 資料一併洗入 Supabase，需加入迴圈寫入邏輯
+                        alert("⚠️ 目前為雲端模式，請手動輸入新資料或調整匯入腳本。");
+                    } else alert("⚠️ JSON 格式有誤");
+                } catch (err) { alert("⚠️ 檔案解析失敗"); }
+            };
+            reader.readAsText(file); event.target.value = '';
         };
 
         // 啟動應用程式
