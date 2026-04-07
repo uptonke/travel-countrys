@@ -204,7 +204,7 @@
         // ==========================================
         // 1. SUPABASE 初始化設定 (⚠️ 請務必換成你的金鑰)
         // ==========================================
-         const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
+        const supabaseUrl = 'https://yrccanqxzrcoknzabifz.supabase.co';
         const supabaseKey = 'sb_publishable_lDfwRDxgMhzRwVk0-Qu3vg_9HTmTFZy';
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
 
@@ -264,12 +264,44 @@
             "Africa": ["egypt", "south africa", "morocco", "kenya", "nigeria"]
         };
         const countryAliasMap = { "us": "United States of America", "usa": "United States of America", "uk": "United Kingdom", "prc": "China", "roc": "Taiwan", "ua": "Ukraine" };
-        const flagMap = { "japan": "🇯🇵", "taiwan": "🇹🇼", "united kingdom": "🇬🇧", "united states of america": "🇺🇸", "thailand": "🇹🇭", "malaysia": "🇲🇾", "china": "🇨🇳", "south korea": "🇰🇷", "france": "🇫🇷", "germany": "🇩🇪", "italy": "🇮🇹", "spain": "🇪🇸", "indonesia": "🇮🇩", "vietnam": "🇻🇳", "singapore": "🇸🇬", "australia": "🇦🇺", "switzerland": "🇨🇭" };
+        // --- 修正版：導入 FlagCDN 解決 Windows 不支援國旗 Emoji 的問題 ---
+        const flagCodeMap = {
+            "japan": "jp", "taiwan": "tw", "united kingdom": "gb", "united states of america": "us", "united states": "us",
+            "thailand": "th", "malaysia": "my", "china": "cn", "south korea": "kr", "france": "fr", 
+            "germany": "de", "italy": "it", "spain": "es", "indonesia": "id", "vietnam": "vn", 
+            "singapore": "sg", "australia": "au", "switzerland": "ch", "hong kong": "hk", "macau": "mo", 
+            "philippines": "ph", "india": "in", "united arab emirates": "ae", "ukraine": "ua", 
+            "netherlands": "nl", "sweden": "se", "austria": "at", "belgium": "be", "portugal": "pt", 
+            "greece": "gr", "russia": "ru", "canada": "ca", "mexico": "mx", "brazil": "br", 
+            "argentina": "ar", "peru": "pe", "chile": "cl", "new zealand": "nz", "fiji": "fj", 
+            "egypt": "eg", "south africa": "za", "morocco": "ma", "kenya": "ke", "nigeria": "ng", "colombia": "co"
+        };
 
         function standardizeCountry(input) { return countryAliasMap[(input || '').trim().toLowerCase()] || (input || '').trim(); }
-        function getContinent(cName) { const c = standardizeCountry(cName).toLowerCase(); for (const [continent, countries] of Object.entries(continentMapping)) { if (countries.includes(c)) return continent; } return "Other"; }
-        function getFlag(c) { return flagMap[(c||'').toLowerCase()] || "📍"; }
+        
+        function getContinent(cName) { 
+            const c = standardizeCountry(cName).toLowerCase(); 
+            for (const [continent, countries] of Object.entries(continentMapping)) { 
+                if (countries.includes(c)) return continent; 
+            } 
+            return "Other"; 
+        }
+
+        // DOM 渲染專用：回傳圖片標籤 (無死角支援所有系統)
+        function getFlag(c) { 
+            const code = flagCodeMap[(c||'').toLowerCase()];
+            return code ? `<img src="https://flagcdn.com/w20/${code}.png" style="width: 18px; vertical-align: middle; border-radius: 2px; margin-right: 4px; box-shadow: 0 0 2px rgba(0,0,0,0.5);">` : "📍"; 
+        }
+
+        // Alert 彈窗專用：回傳文字 Emoji (因 Alert 無法渲染 HTML)
+        function getFlagText(c) {
+            const code = flagCodeMap[(c||'').toLowerCase()];
+            if (!code) return "📍";
+            return String.fromCodePoint(...code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0)));
+        }
+        
         function getCountryArea(feature) {
+            // ... (維持原樣)
             const name = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
             if (!name) return 0;
             if (!countryAreaCache[name]) countryAreaCache[name] = turf.area(feature) / 1_000_000;
@@ -423,10 +455,28 @@
             filteredLocations.forEach(loc => {
                 const days = calculateDays(loc.dateStart, loc.dateEnd);
                 const cName = loc.country.toUpperCase(); const rank = parseInt(loc.ranking) || 10;
-                if (!countriesData[cName]) countriesData[cName] = { totalDays: 0, visits: 0, totalRank: 0 };
-                countriesData[cName].totalDays += days; countriesData[cName].visits += 1; countriesData[cName].totalRank += rank; totalDaysAll += days;
+                
+                // 加入 regions Set 來計算不重複的城市
+                if (!countriesData[cName]) countriesData[cName] = { totalDays: 0, visits: 0, totalRank: 0, regions: new Set() };
+                
+                countriesData[cName].totalDays += days; 
+                countriesData[cName].visits += 1; 
+                countriesData[cName].totalRank += rank; 
+                countriesData[cName].regions.add(loc.region.toLowerCase()); // 記錄獨立據點
+                
+                totalDaysAll += days;
             });
 
+            Object.keys(countriesData).sort((a,b) => countriesData[b].totalDays - countriesData[a].totalDays).forEach(c => {
+                const stat = countriesData[c]; const avgRank = (stat.totalRank / stat.visits).toFixed(1);
+                const cityCount = stat.regions.size; // 算出獨立城市/據點數量
+                
+                summaryList.innerHTML += `
+                    <div style="background: rgba(0,0,0,0.25); padding: 10px; margin-bottom: 6px; border-radius: 6px; border-left: 4px solid var(--accent);">
+                        <strong style="color: #fff; font-size: 1.05rem;">${getFlag(c)} ${c}</strong><br>
+                        <span style="color: var(--text-sub); font-size: 0.85rem;">停留：${stat.totalDays}天 | 排名平均：${avgRank} | 造訪城市：${cityCount}</span>
+                    </div>`;
+            });
             Object.keys(countriesData).sort((a,b) => countriesData[b].totalDays - countriesData[a].totalDays).forEach(c => {
                 const stat = countriesData[c]; const avgRank = (stat.totalRank / stat.visits).toFixed(1);
                 summaryList.innerHTML += `
@@ -677,16 +727,45 @@
                 return ta - tb;
             });
             if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
+            
             switchMode('region'); regionLayerGroup.clearLayers();
             const btn = document.querySelector('button[onclick="playTimeline()"]');
             btn.innerText = '推演中... ⏳'; btn.disabled = true;
 
+            // 建立行軍虛線與步行 Icon
+            const pathLine = L.polyline([], { color: varCSS('--accent'), weight: 3, dashArray: '5, 8', opacity: 0.8 }).addTo(regionLayerGroup);
+            const personIcon = L.divIcon({ 
+                html: '<div style="font-size: 26px; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); transform: scaleX(-1);">🚶‍♂️</div>', 
+                className: '', iconSize: [26, 26], iconAnchor: [13, 26] 
+            });
+            let movingMarker = null;
+
             for (let i = 0; i < validLocs.length; i++) {
                 const loc = validLocs[i];
-                mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 1.2 });
-                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 }).bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`).addTo(regionLayerGroup).openPopup();
-                await new Promise(r => setTimeout(r, 1800)); 
+                
+                // 1. 放慢運鏡速度 (duration: 2.5秒)
+                mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 2.5 });
+                
+                // 2. 畫線與移動小人
+                pathLine.addLatLng([loc.lat, loc.lng]);
+                if (!movingMarker) {
+                    movingMarker = L.marker([loc.lat, loc.lng], {icon: personIcon}).addTo(regionLayerGroup);
+                } else {
+                    movingMarker.setLatLng([loc.lat, loc.lng]);
+                }
+
+                // 配合飛行時間進行非同步等待
+                await new Promise(r => setTimeout(r, 2600)); 
+                
+                // 3. 抵達後點亮據點並彈出戰報
+                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 })
+                 .bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`)
+                 .addTo(regionLayerGroup).openPopup();
+                
+                // 停頓讓人檢視 (1.5秒)
+                await new Promise(r => setTimeout(r, 1500)); 
             }
+            
             alert('✅ 戰略推演完畢！');
             btn.innerText = '▶️ 軌跡推演'; btn.disabled = false;
             renderMapRegions(); 
@@ -710,7 +789,7 @@
             const targetPool = continentMapping[bestContinent].filter(c => !visited.has(c));
             if (targetPool.length === 0) return alert(`🗺️ 太強了！你在 ${bestContinent} 已經沒有常見戰略盲區，建議將目光轉向新興板塊！`);
             const recommendation = targetPool[Math.floor(Math.random() * targetPool.length)].toUpperCase();
-            alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${bestContinent}】獲得的高排名比例極高。\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlag(recommendation)} ${recommendation} 】`);
+            alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${bestContinent}】獲得的高排名比例極高。\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlagText(recommendation)} ${recommendation} 】`);
         };
 
         // 啟動應用程式
