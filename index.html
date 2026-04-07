@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        
+    
     <style>
         :root {
             --bg-color: #0f172a; --panel-bg: #1e293b; --text-main: #f8fafc; --text-sub: #94a3b8;
@@ -30,7 +30,6 @@
         .stat-label { color: var(--text-sub); font-size: 1rem; margin-top: 0.5rem; }
         .sub-text { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
 
-        /* 圖表區塊 */
         .chart-wrapper { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
         .chart-container { background-color: var(--panel-bg); padding: 1rem; border-radius: 12px; border: 1px solid #334155; height: 280px; position: relative; }
 
@@ -105,7 +104,7 @@
                 <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">解鎖城市/省分</div>
+                <div class="stat-label">解鎖據點總數</div>
                 <div class="stat-number" id="count-region">0</div>
             </div>
             <div class="stat-card">
@@ -113,17 +112,11 @@
                 <div class="stat-number" id="exposure-continent" style="color: var(--rating);">0.00</div>
                 <div class="sub-text" id="exposure-country">評估中...</div>
             </div>
-            <div class="stats-grid">
-            </div>
+        </div>
 
         <div class="chart-wrapper">
             <div class="chart-container"><canvas id="annualChart"></canvas></div>
             <div class="chart-container"><canvas id="continentPieChart"></canvas></div>
-        </div>
-        <div class="view-toggle">
-            <div class="data-controls">
-                <button class="btn-data" onclick="syncToGitHub()">☁️ GitHub 雲端同步</button>
-                ```
         </div>
 
         <div class="view-toggle">
@@ -217,9 +210,26 @@
         
         let chartBar = null; 
         let chartPie = null;
-        let chartGantt = null;
 
-        // 讀取資料
+        // --- 防呆萃取年份引擎 ---
+        function extractYear(loc) {
+            if (loc.dateStart && loc.dateStart.length >= 4) return loc.dateStart.substring(0, 4);
+            if (loc.dateRange) {
+                const match = loc.dateRange.match(/\d{4}/);
+                if (match) return match[0];
+            }
+            return null;
+        }
+
+        function calculateDays(start, end) {
+            if (!start || !end) return 1;
+            const startD = new Date(start);
+            const endD = new Date(end);
+            if(isNaN(startD) || isNaN(endD)) return 1;
+            const diffTime = Math.abs(endD - startD);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        }
+
         try {
             const stored = JSON.parse(localStorage.getItem('travelLogV12')) || JSON.parse(localStorage.getItem('travelLogV11')) || JSON.parse(localStorage.getItem('travelLogV10'));
             if (Array.isArray(stored)) {
@@ -227,7 +237,6 @@
             }
         } catch(e) { console.warn("快取讀取失敗"); }
 
-        // --- 洲際與國旗庫 ---
         const continentMapping = {
             "Asia": ["japan", "taiwan", "thailand", "malaysia", "china", "south korea", "united arab emirates", "singapore", "vietnam", "indonesia", "philippines", "india", "hong kong", "macau"],
             "Europe": ["united kingdom", "france", "germany", "italy", "spain", "ukraine", "netherlands", "switzerland", "sweden", "austria", "belgium", "portugal", "greece", "russia"],
@@ -253,20 +262,13 @@
             if (!countryAreaCache[name]) countryAreaCache[name] = turf.area(feature) / 1_000_000;
             return countryAreaCache[name];
         }
-
         const varCSS = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         function formatDateCN(dateStr) {
             if (!dateStr) return '';
             const d = new Date(dateStr);
             return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
         }
-        function calculateDays(start, end) {
-            if (!start || !end) return 1;
-            const diffTime = Math.abs(new Date(end) - new Date(start));
-            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        }
 
-        // --- 地圖初始化 ---
         const mapMain = L.map('map-main', { zoomControl: true }).setView([25, 0], 2);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OSM', minZoom: 2, maxZoom: 18 }).addTo(mapMain);
 
@@ -289,7 +291,7 @@
                 const heatPoints = locations.filter(loc => loc.lat && loc.lng).map(loc => {
                     const days = calculateDays(loc.dateStart, loc.dateEnd);
                     const rank = parseInt(loc.ranking) || 10;
-                    const weight = days * (1 / rank); // 權重演算法
+                    const weight = days * (1 / rank); 
                     return [loc.lat, loc.lng, weight];
                 });
                 heatLayerGroup = L.heatLayer(heatPoints, { radius: 35, blur: 20, max: 15, maxZoom: 6, gradient: {0.2: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red'} }).addTo(mapMain);
@@ -328,7 +330,7 @@
                     let fillColor = varCSS('--country-default');
                     let fillOpacity = 0.2;
                     if (isVisited) {
-                        fillOpacity = 0.4 + (0.5 * (days / maxDays)); // 依照天數加深顏色
+                        fillOpacity = 0.4 + (0.5 * (days / maxDays));
                         if (days > 14) fillColor = '#166534';
                         else if (days > 5) fillColor = '#22c55e';
                         else fillColor = '#4ade80';
@@ -357,14 +359,19 @@
         }
 
         function renderChart(filteredLocs) {
-            const ctxBar = document.getElementById('annualChart').getContext('2d');
-            const ctxPie = document.getElementById('continentPieChart').getContext('2d');
+            const barCanvas = document.getElementById('annualChart');
+            const pieCanvas = document.getElementById('continentPieChart');
+            if (!barCanvas || !pieCanvas) return;
+
+            const ctxBar = barCanvas.getContext('2d');
+            const ctxPie = pieCanvas.getContext('2d');
             
             const yearCounts = {}; const yearDays = {}; const continentCounts = {};
 
             filteredLocs.forEach(loc => {
                 const days = calculateDays(loc.dateStart, loc.dateEnd);
-                const y = loc.dateStart ? loc.dateStart.substring(0,4) : '未知';
+                const y = extractYear(loc) || '未知';
+                
                 yearCounts[y] = (yearCounts[y] || 0) + 1;
                 yearDays[y] = (yearDays[y] || 0) + days;
                 const cont = getContinent(loc.country);
@@ -375,14 +382,16 @@
             const dataCounts = labels.map(y => yearCounts[y]);
             const dataDays = labels.map(y => yearDays[y]);
             
-            // 累積解鎖國家
             const cumulativeCountries = labels.map(year => {
-                const locsUpToYear = locations.filter(l => l.dateStart && l.dateStart.substring(0,4) <= year);
+                const locsUpToYear = locations.filter(l => {
+                    let locY = extractYear(l);
+                    return locY && locY <= year;
+                });
                 return new Set(locsUpToYear.map(l => (l.country||'').toLowerCase())).size;
             });
 
-            if(chartBar) chartBar.destroy();
-            chartBar = new Chart(ctxBar, {
+            if(window.chartBar) window.chartBar.destroy();
+            window.chartBar = new Chart(ctxBar, {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -401,8 +410,8 @@
             });
             const contData = Object.values(continentCounts);
 
-            if(chartPie) chartPie.destroy();
-            chartPie = new Chart(ctxPie, {
+            if(window.chartPie) window.chartPie.destroy();
+            window.chartPie = new Chart(ctxPie, {
                 type: 'doughnut',
                 data: { labels: contLabels, datasets: [{ data: contData, backgroundColor: ['#38bdf8', '#22c55e', '#fbbf24', '#f43f5e', '#a855f7', '#64748b'], borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: varCSS('--text-sub') } }, title: { display: true, text: '🌍 洲別分布', color: varCSS('--text-main'), font: { size: 16 } } } }
@@ -420,15 +429,7 @@
             const filterContinent = document.getElementById('filter-continent')?.value || 'all';
             const sortBy = document.getElementById('sort-by')?.value || 'date';
 
-            const years = new Set(locations.map(loc => {
-                if (loc.dateStart) return loc.dateStart.substring(0, 4);
-                if (loc.dateRange) {
-                    const match = loc.dateRange.match(/\d{4}/);
-                    if (match) return match[0];
-                }
-                return null;
-            }).filter(y => y !== null));
-
+            const years = new Set(locations.map(loc => extractYear(loc)).filter(y => y !== null));
             const yearSelect = document.getElementById('filter-year');
             if (yearSelect) {
                 const currentSelection = yearSelect.value;
@@ -444,20 +445,10 @@
                 const c = (loc.country || '').toLowerCase();
                 const r = (loc.region || '').toLowerCase();
                 const locContinent = getContinent(loc.country);
-                
-                // 👉 向下相容：過濾時匹配舊資料年份
-                let locYear = 'none';
-                if (loc.dateStart) {
-                    locYear = loc.dateStart.substring(0, 4);
-                } else if (loc.dateRange) {
-                    const match = loc.dateRange.match(/\d{4}/);
-                    if (match) locYear = match[0];
-                }
-
+                const locYear = extractYear(loc) || 'none';
                 return (c.includes(searchKeyword) || r.includes(searchKeyword)) && (filterYear === 'all' || locYear === filterYear) && (filterContinent === 'all' || locContinent === filterContinent);
             });
 
-            // 聚合運算 & HHI
             const countriesData = {};
             let totalDaysAll = 0;
             filteredLocations.forEach(loc => {
@@ -503,7 +494,6 @@
 
             const sortedLocations = [...filteredLocations].sort((a, b) => {
                 if (sortBy === 'rank') return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
-                
                 const timeA = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
                 const timeB = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
                 return timeB - timeA;
@@ -546,7 +536,6 @@
             if(currentMode === 'heat') switchMode('heat'); 
         }
 
-        // --- Autocomplete ---
         const regionInput = document.getElementById('input-region');
         const countryInput = document.getElementById('input-country');
         const autocompleteList = document.getElementById('autocomplete-list');
@@ -584,7 +573,6 @@
             if (e.target !== regionInput && e.target !== autocompleteList) autocompleteList.style.display = 'none';
         });
 
-        // --- 表單邏輯 ---
         const dateStartElForm = document.getElementById('input-date-start');
         const dateEndElForm = document.getElementById('input-date-end');
         if(dateStartElForm && dateEndElForm) {
@@ -668,9 +656,12 @@
             renderAll();
         };
 
-        // --- 外掛功能 ---
         window.playTimeline = async function() {
-            const validLocs = [...locations].filter(l => l.lat && l.lng && l.dateStart).sort((a,b) => new Date(a.dateStart) - new Date(b.dateStart));
+            const validLocs = [...locations].filter(l => l.lat && l.lng && extractYear(l)).sort((a,b) => {
+                const ta = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
+                const tb = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
+                return ta - tb;
+            });
             if (validLocs.length === 0) return alert('無包含日期的戰報可推演！');
             switchMode('region'); regionLayerGroup.clearLayers();
             const btn = document.querySelector('button[onclick="playTimeline()"]');
@@ -679,7 +670,7 @@
             for (let i = 0; i < validLocs.length; i++) {
                 const loc = validLocs[i];
                 mapMain.flyTo([loc.lat, loc.lng], 5, { duration: 1.2 });
-                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 }).bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateStart}`).addTo(regionLayerGroup).openPopup();
+                L.circleMarker([loc.lat, loc.lng], { color: '#fbbf24', fillColor: '#fbbf24', fillOpacity: 0.9, radius: 8 }).bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange || loc.dateStart}`).addTo(regionLayerGroup).openPopup();
                 await new Promise(r => setTimeout(r, 1800)); 
             }
             alert('✅ 戰略推演完畢！');
