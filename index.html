@@ -684,9 +684,46 @@
             text-transform: uppercase;
             white-space: nowrap;
         }
+        /* ─── Login Overlay ─── */
+        #login-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(6, 13, 26, 0.95);
+            backdrop-filter: blur(15px);
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.3s ease;
+        }
+        .login-card {
+            background: var(--panel-solid);
+            border: 1px solid var(--border-bright);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem 2rem;
+            width: 100%; max-width: 380px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px var(--cyan-glow);
+        }
     </style>
 </head>
 <body>
+    <div id="login-overlay" style="display: none;">
+    <div class="login-card">
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <div style="font-size: 3.5rem; margin-bottom: 0.5rem; text-shadow: 0 0 20px var(--cyan-glow);">🌍</div>
+            <h2 style="font-family: 'Rajdhani', sans-serif; font-size: 1.8rem; color: var(--cyan); letter-spacing: 2px;">STRATEGIC COMMAND</h2>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sub); letter-spacing: 3px; margin-top: 5px;">SECURE ACCESS ONLY</div>
+        </div>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="input-group">
+                <div class="field-label">EMAIL 認證信箱</div>
+                <input type="email" id="login-email" required placeholder="Enter your email">
+            </div>
+            <div class="input-group" style="margin-bottom: 1.5rem;">
+                <div class="field-label">PASSWORD 終極密碼</div>
+                <input type="password" id="login-password" required placeholder="Enter your password">
+            </div>
+            <div id="login-error" style="color: var(--red); font-size: 12px; margin-bottom: 1rem; text-align: center; display: none;"></div>
+            <button type="submit" id="login-btn" class="btn-submit">LOGIN 系統登入</button>
+        </form>
+    </div>
+</div>
 
 <div class="page-wrapper">
 <div class="container">
@@ -752,6 +789,7 @@
 
             <button class="btn-timeline" onclick="playTimeline()">▶ 軌跡推演</button>
             <button class="btn-ai" onclick="recommendNext()">✦ AI 戰略預測</button>
+            <button class="btn-data" style="color: var(--red); border-color: rgba(248,113,113,0.3);" onclick="handleLogout()">🚪 撤離系統 (Logout)</button>
         </div>
     </div>
 
@@ -1349,7 +1387,58 @@
         alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${best}】獲得的高排名比例極高。\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlagText(rec)} ${rec} 】`);
     };
 
-    initApp();
+    // ==========================================
+    // 🔒 Auth & Session Management (登入閘門)
+    // ==========================================
+    async function checkAuth() {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (session) {
+            hideLoginOverlay();
+            initApp(); // 有鑰匙，才啟動主程式拉資料
+        } else {
+            // 沒鑰匙，顯示登入畫面並擋住
+            document.getElementById('login-overlay').style.display = 'flex';
+        }
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const btn = document.getElementById('login-btn');
+        const errorDiv = document.getElementById('login-error');
+
+        btn.innerText = 'AUTHENTICATING...';
+        errorDiv.style.display = 'none';
+
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: password,
+        });
+
+        if (error) {
+            errorDiv.innerText = 'Access Denied: ' + error.message;
+            errorDiv.style.display = 'block';
+            btn.innerText = 'LOGIN 系統登入';
+        } else {
+            hideLoginOverlay();
+            initApp();
+        }
+    }
+
+    async function handleLogout() {
+        await supabaseClient.auth.signOut();
+        window.location.reload(); // 刷新重置
+    }
+
+    function hideLoginOverlay() {
+        const overlay = document.getElementById('login-overlay');
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; }, 300);
+    }
+
+    // 🚀 網頁載入後的第一個動作：從檢查權限開始！
+    document.addEventListener('DOMContentLoaded', checkAuth);
 </script>
 </body>
 </html>
