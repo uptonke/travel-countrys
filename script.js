@@ -325,7 +325,7 @@ regionInput.addEventListener('input', function() {
     if(val.length<2){ autocompleteList.style.display='none'; return; }
     debounceTimer=setTimeout(async()=>{
         try {
-            const res=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&limit=5`);
+            const res=await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(val)}`);
             const data=await res.json(); autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
@@ -353,7 +353,7 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
-        const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${region}, ${country}`)}&format=json&limit=1&polygon_geojson=1&polygon_threshold=0.005`;
+        const url=`http://localhost:8000/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
         const res=await fetch(url); const data=await res.json();
         if(data&&data.length>0) return { lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon), geojson:data[0].geojson };
     } catch(e){ console.error(e); } return null;
@@ -500,17 +500,65 @@ window.playTimeline=async function(){
     btn.innerText='▶ 軌跡推演'; btn.disabled=false; renderMapRegions();
 };
 
-window.recommendNext=function(){
-    if(locations.length===0) return alert('請先輸入戰報，AI 才能分析偏好！');
-    const cr={};
-    locations.forEach(l=>{ const c=getContinent(l.country); if(!cr[c]) cr[c]=[]; cr[c].push(parseInt(l.ranking)||10); });
-    let best='Europe', bestAvg=99;
-    for(const [c,ranks] of Object.entries(cr)){ if(c==='Other') continue; const avg=ranks.reduce((a,b)=>a+b,0)/ranks.length; if(avg<bestAvg){bestAvg=avg;best=c;} }
-    const visited=new Set(locations.map(l=>standardizeCountry(l.country).toLowerCase()));
-    const pool=continentMapping[best].filter(c=>!visited.has(c));
-    if(pool.length===0) return alert(`🗺️ 太強了！你在 ${best} 已無常見盲區，建議轉向新興板塊！`);
-    const rec=pool[Math.floor(Math.random()*pool.length)].toUpperCase();
-    alert(`🤖 [AI 戰略分析]\n\n數據顯示你在【${best}】獲得的高排名比例極高。\n結合板塊空缺分析，強烈建議你下一站部署：\n🎯 【 ${getFlagText(rec)} ${rec} 】`);
+// ==========================================
+// 🚀 真 AI 戰略預測引擎 (對接 FastAPI 後端)
+// ==========================================
+window.recommendNext = async function() {
+    if (locations.length === 0) return alert('請先輸入戰報，AI 才能進行偏好分析！');
+
+    const btn = document.querySelector('.btn-ai');
+    const originalText = btn.innerHTML;
+    
+    // UI 狀態切換
+    btn.innerHTML = '🧠 神經網絡演算中...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+
+    // 1. 整理戰報數據，精簡傳給後端的 payload
+    const payload = locations.map(l => ({
+        country: l.country,
+        region: l.region,
+        ranking: parseInt(l.ranking) || 10,
+        days: calculateDays(l.dateStart, l.dateEnd)
+    }));
+
+    try {
+        // 2. 呼叫本地端的 Python FastAPI
+        const response = await fetch('http://localhost:8000/api/recommend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logs: payload })
+        });
+
+        if (!response.ok) {
+            throw new Error(`伺服器代碼: ${response.status}`);
+        }
+
+        const aiResult = await response.json();
+
+        // 3. 展示 AI 運算結果
+        const msg = `🤖 [AI 戰略預測分析]
+
+🔍 偏好解析：
+${aiResult.analysis}
+
+🎯 建議空降座標：
+【 ${getFlagText(aiResult.recommend_country)} ${aiResult.recommend_country} - ${aiResult.recommend_city} 】
+
+📝 戰略理由：
+${aiResult.reason}`;
+
+        alert(msg);
+
+    } catch (error) {
+        console.error('AI 請求失敗:', error);
+        alert('⚠️ 無法連線至戰略中樞，請確認 Python 後端 (localhost:8000) 是否已啟動。');
+    } finally {
+        // 恢復 UI 狀態
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    }
 };
 
 // ==========================================
