@@ -325,6 +325,7 @@ regionInput.addEventListener('input', function() {
     if(val.length<2){ autocompleteList.style.display='none'; return; }
     debounceTimer=setTimeout(async()=>{
         try {
+            // 已更新：加上你的 ngrok 網址與繞過警告的 header
             const res = await fetch(`https://stream-ritzy-handoff.ngrok-free.dev/api/search?q=${encodeURIComponent(val)}`, {
                 headers: { 'ngrok-skip-browser-warning': 'true' }
             });
@@ -355,6 +356,7 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
+        // 已更新：加上你的 ngrok 網址與繞過警告的 header
         const url = `https://stream-ritzy-handoff.ngrok-free.dev/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
         const res = await fetch(url, {
             headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -528,7 +530,7 @@ window.recommendNext = async function() {
     }));
 
     try {
-        // 2. 呼叫雲端 Python FastAPI
+        // 已更新：加上你的 ngrok 網址與繞過警告的 header
         const response = await fetch('https://stream-ritzy-handoff.ngrok-free.dev/api/recommend', {
             method: 'POST',
             headers: { 
