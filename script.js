@@ -325,7 +325,9 @@ regionInput.addEventListener('input', function() {
     if(val.length<2){ autocompleteList.style.display='none'; return; }
     debounceTimer=setTimeout(async()=>{
         try {
-            const res=await fetch(`http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/search?q=${encodeURIComponent(val)}`);
+            const res = await fetch(`https://stream-ritzy-handoff.ngrok-free.dev/api/search?q=${encodeURIComponent(val)}`, {
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             const data=await res.json(); autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
@@ -353,8 +355,11 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
-        const url=`http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
-        const res=await fetch(url); const data=await res.json();
+        const url = `https://stream-ritzy-handoff.ngrok-free.dev/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
+        const res = await fetch(url, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        const data=await res.json();
         if(data&&data.length>0) return { lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon), geojson:data[0].geojson };
     } catch(e){ console.error(e); } return null;
 }
@@ -523,10 +528,13 @@ window.recommendNext = async function() {
     }));
 
     try {
-        // 2. 呼叫本地端的 Python FastAPI
-        const response = await fetch('http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/recommend', {
+        // 2. 呼叫雲端 Python FastAPI
+        const response = await fetch('https://stream-ritzy-handoff.ngrok-free.dev/api/recommend', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            },
             body: JSON.stringify({ logs: payload })
         });
 
@@ -552,7 +560,7 @@ ${aiResult.reason}`;
 
     } catch (error) {
         console.error('AI 請求失敗:', error);
-        alert('⚠️ 無法連線至戰略中樞，請確認 Python 後端 (localhost:8000) 是否已啟動。');
+        alert('⚠️ 無法連線至戰略中樞，請確認 Python 後端隧道是否已啟動。');
     } finally {
         // 恢復 UI 狀態
         btn.innerHTML = originalText;
