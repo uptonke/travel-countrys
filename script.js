@@ -327,7 +327,8 @@ regionInput.addEventListener('input', function() {
         try {
             // 已更新：加上你的 ngrok 網址與繞過警告的 header
             const res = await fetch(`https://travel-command-api.onrender.com/api/search?q=${encodeURIComponent(val)}`);
-            const data=await res.json(); autocompleteList.innerHTML='';
+            const data = await res.json(); 
+            autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
                 const div=document.createElement('div'); div.className='autocomplete-item';
@@ -354,13 +355,14 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
-        // 已更新：加上你的 ngrok 網址與繞過警告的 header
-        const url = `https://stream-ritzy-handoff.ngrok-free.dev/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
         const url = `https://travel-command-api.onrender.com/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
         const res = await fetch(url);
-        const data=await res.json();
-        if(data&&data.length>0) return { lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon), geojson:data[0].geojson };
-    } catch(e){ console.error(e); } return null;
+        const data = await res.json();
+        if(data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
+    } catch(e){ 
+        console.error("邊界抓取失敗:", e); 
+    } 
+    return null;
 }
 
 document.getElementById('tracker-form')?.addEventListener('submit', async function(e) {
