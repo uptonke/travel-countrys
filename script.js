@@ -325,7 +325,7 @@ regionInput.addEventListener('input', function() {
     if(val.length<2){ autocompleteList.style.display='none'; return; }
     debounceTimer=setTimeout(async()=>{
         try {
-            const res=await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(val)}`);
+            const res=await fetch(`http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/search?q=${encodeURIComponent(val)}`);
             const data=await res.json(); autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
@@ -353,7 +353,7 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
-        const url=`http://localhost:8000/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
+        const url=`http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
         const res=await fetch(url); const data=await res.json();
         if(data&&data.length>0) return { lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon), geojson:data[0].geojson };
     } catch(e){ console.error(e); } return null;
@@ -524,7 +524,7 @@ window.recommendNext = async function() {
 
     try {
         // 2. 呼叫本地端的 Python FastAPI
-        const response = await fetch('http://localhost:8000/api/recommend', {
+        const response = await fetch('http://https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md/api/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ logs: payload })
