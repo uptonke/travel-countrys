@@ -26,7 +26,7 @@ async function initApp() {
         }));
     }
     try {
-        const res = await fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson');
+        const res = await fetch(`https://travel-command-api.onrender.com/api/search?q=${encodeURIComponent(val)}`);
         worldGeoJSON = await res.json();
         renderAll();
     } catch(e) { console.error("世界地圖載入失敗:", e); }
@@ -326,9 +326,7 @@ regionInput.addEventListener('input', function() {
     debounceTimer=setTimeout(async()=>{
         try {
             // 已更新：加上你的 ngrok 網址與繞過警告的 header
-            const res = await fetch(`https://stream-ritzy-handoff.ngrok-free.dev/api/search?q=${encodeURIComponent(val)}`, {
-                headers: { 'ngrok-skip-browser-warning': 'true' }
-            });
+            const res = await fetch(`https://travel-command-api.onrender.com/api/search?q=${encodeURIComponent(val)}`);
             const data=await res.json(); autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
@@ -358,9 +356,8 @@ async function fetchRegionBoundary(region, country) {
     try {
         // 已更新：加上你的 ngrok 網址與繞過警告的 header
         const url = `https://stream-ritzy-handoff.ngrok-free.dev/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
-        const res = await fetch(url, {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
-        });
+        const url = `https://travel-command-api.onrender.com/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
+        const res = await fetch(url);
         const data=await res.json();
         if(data&&data.length>0) return { lat:parseFloat(data[0].lat), lng:parseFloat(data[0].lon), geojson:data[0].geojson };
     } catch(e){ console.error(e); } return null;
@@ -508,7 +505,7 @@ window.playTimeline=async function(){
 };
 
 // ==========================================
-// 🚀 真 AI 戰略預測引擎 (對接 FastAPI 後端)
+// 🚀 真 AI 戰略預測引擎 (對接 Render 雲端後端)
 // ==========================================
 window.recommendNext = async function() {
     if (locations.length === 0) return alert('請先輸入戰報，AI 才能進行偏好分析！');
@@ -530,12 +527,11 @@ window.recommendNext = async function() {
     }));
 
     try {
-        // 已更新：加上你的 ngrok 網址與繞過警告的 header
-        const response = await fetch('https://stream-ritzy-handoff.ngrok-free.dev/api/recommend', {
+        // 2. 呼叫 Render 雲端 Python FastAPI (已換成正式網址，並移除 ngrok header)
+        const response = await fetch('https://travel-command-api.onrender.com/api/recommend', {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ logs: payload })
         });
@@ -562,7 +558,8 @@ ${aiResult.reason}`;
 
     } catch (error) {
         console.error('AI 請求失敗:', error);
-        alert('⚠️ 無法連線至戰略中樞，請確認 Python 後端隧道是否已啟動。');
+        // 修改錯誤提示，提醒休眠狀態
+        alert('⚠️ 無法連線至雲端戰略中樞，伺服器可能正在從休眠中喚醒，請稍等 30 秒後再試一次！');
     } finally {
         // 恢復 UI 狀態
         btn.innerHTML = originalText;
