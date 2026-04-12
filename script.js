@@ -16,22 +16,27 @@ let locations = [];
 let editingId = null;
 
 async function initApp() {
+    // 1. 從 Supabase 撈取歷史戰報
     const { data, error } = await supabaseClient.from('travel_logs').select('*');
-    if (error) { console.error("Supabase 讀取失敗:", error); }
-    else if (data) {
+    if (error) { 
+        console.error("Supabase 讀取失敗:", error); 
+    } else if (data) {
         locations = data.map(d => ({
             id: d.id, dateStart: d.date_start, dateEnd: d.date_end, dateRange: d.date_range,
             country: d.country, region: d.region, ranking: d.ranking,
             lat: d.lat, lng: d.lng, geojson: d.geojson
         }));
     }
-    try {
-        const res = await fetch(`https://travel-command-api.onrender.com/api/search?q=${encodeURIComponent(val)}`);
-        worldGeoJSON = await res.json();
-        renderAll();
-    } catch(e) { console.error("世界地圖載入失敗:", e); }
-}
 
+    // 2. 載入世界地圖 GeoJSON (這是固定資源，不帶參數)
+    try {
+        const res = await fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson');
+        worldGeoJSON = await res.json();
+        renderAll(); // 渲染地圖與 UI
+    } catch(e) { 
+        console.error("世界地圖載入失敗:", e); 
+    }
+}
 // ==========================================
 // 3. 輔助函數
 // ==========================================
