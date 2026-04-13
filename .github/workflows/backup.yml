@@ -4,8 +4,17 @@ on:
   schedule:
     - cron: '0 18 * * *' # 每天 UTC 時間 18:00 (台灣半夜 2:00) 執行
   workflow_dispatch: # 允許手動點擊觸發
+name: Supabase Daily Backup
 
-# 【關鍵修正】明確賦予 GITHUB_TOKEN 寫入 Repo 的權限
+on:
+  schedule:
+    - cron: '0 18 * * *' # 每天 UTC 時間 18:00 (台灣半夜 2:00) 執行
+  workflow_dispatch: # 允許手動點擊觸發
+
+# 【新增這區塊】主動升級底層環境至 Node.js 24，消除官方警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write
 
