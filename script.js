@@ -69,6 +69,128 @@ const flagCodeMap = {
     "fiji":"fj","egypt":"eg","south africa":"za","morocco":"ma","kenya":"ke","nigeria":"ng","colombia":"co"
 };
 function standardizeCountry(input) { return countryAliasMap[(input||'').trim().toLowerCase()] || (input||'').trim(); }
+function formatPlaceName(text) {
+    const raw = (text || '').trim();
+    if (!raw) return '';
+
+    const lower = raw.toLowerCase();
+
+    const specialMap = {
+        'uk': 'UK',
+        'usa': 'USA',
+        'uae': 'UAE',
+        'hong kong': 'Hong Kong',
+        'hong kong sar': 'Hong Kong SAR',
+        'macau': 'Macau',
+        'new york': 'New York',
+        'los angeles': 'Los Angeles',
+        'las vegas': 'Las Vegas',
+        'united kingdom': 'United Kingdom',
+        'united states of america': 'United States of America',
+        'south korea': 'South Korea',
+        'taipei': 'Taipei',
+        'tokyo': 'Tokyo',
+        'osaka': 'Osaka',
+        'kyoto': 'Kyoto',
+        'london': 'London',
+        'paris': 'Paris',
+        'bangkok': 'Bangkok',
+        'beijing': 'Beijing',
+        'tianjin': 'Tianjin'
+    };
+
+    if (specialMap[lower]) return specialMap[lower];
+
+    return lower.replace(/\b\w/g, c => c.toUpperCase());
+}
+function buildRegionPopup(loc, days) {
+    return `<strong>${getFlag(loc.country)} ${formatPlaceName(loc.region)}</strong><br>${formatPlaceName(loc.country)}<br>${UI_TEXT.popup.vibeRank}: No.${loc.ranking}<br>${UI_TEXT.popup.stayDays}: ${days} 天`;
+}
+
+function buildTimelinePopup(loc) {
+    return `<strong>${getFlag(loc.country)} ${formatPlaceName(loc.region)}</strong><br>${formatPlaceName(loc.country)}<br>${UI_TEXT.popup.date} ${loc.dateRange || loc.dateStart}`;
+}
+
+function buildLogItemHTML(loc, days) {
+    return `
+        <div class="log-item-info">
+            <div class="log-item-top">
+                <span class="badge-country">${getFlag(loc.country)} ${formatPlaceName(loc.country)}</span>
+                <span class="badge-region">${formatPlaceName(loc.region)}</span>
+                <span class="badge-rank">No.${loc.ranking}</span>
+                <span class="badge-days">${days}天</span>
+            </div>
+            <div class="log-date">${UI_TEXT.popup.date} ${loc.dateRange || UI_TEXT.log.noRecord}</div>
+        </div>
+        <div class="action-group">
+            <button class="action-btn edit-btn" data-action="edit" data-id="${loc.id}">${UI_TEXT.log.edit}</button>
+            <button class="action-btn delete-btn" data-action="delete" data-id="${loc.id}">${UI_TEXT.log.delete}</button>
+        </div>
+    `;
+}
+const UI_TEXT = {
+    popup: {
+        vibeRank: '🏆 Vibe 排名',
+        stayDays: '⏱️ 停留',
+        date: '📅'
+    },
+    log: {
+        noRecord: '未紀錄',
+        edit: '編輯',
+        delete: '刪除'
+    },
+    summary: {
+        stay: '停留',
+        avgRank: '排名均值',
+        cityCountSuffix: '座城市'
+    },
+    buttons: {
+        submitCreate: '🚀 空降新領地',
+        submitEdit: '💾 儲存變更',
+        submitLoading: '🛰️ 衛星掃描中...',
+        importIdle: '📂 匯入舊版 JSON',
+        importLoading: '☁️ 上傳中...',
+        timelineIdle: '▶ 軌跡推演',
+        timelineLoading: '推演中... ⏳',
+        aiLoading: '🧠 神經網絡演算中...'
+    },
+    modal: {
+        aiTitle: 'AI 戰略預測分析',
+        aiClose: '關閉',
+        confirmDeleteTitle: '刪除這筆旅遊紀錄？',
+        confirmDeleteMessage: '刪除後不會自動復原。',
+        confirmDeleteYes: '確認刪除',
+        confirmDeleteNo: '先不要'
+    },
+    toast: {
+        geoNotFound: '找不到地理資料，請確認拼寫是否正確。',
+        noExportData: '尚未有任何旅遊紀錄可匯出。',
+        noTimelineData: '沒有包含日期的旅遊紀錄可推演。',
+        timelineDone: '戰略推演完畢。',
+        aiNoData: '請先輸入旅遊紀錄，AI 才能進行偏好分析。',
+        aiUnavailable: '無法連線到 AI 服務，伺服器可能正在喚醒中，稍後再試。',
+        importFormatError: 'JSON 格式有誤，必須是陣列格式。',
+        importParseError: '檔案解析失敗。',
+        deleteDone: '已刪除這筆旅遊紀錄。'
+    },
+    ai: {
+        header: '🤖 [AI 戰略預測分析]',
+        analysis: '🔍 偏好解析：',
+        target: '🎯 建議空降座標：',
+        reason: '📝 戰略理由：'
+    }
+};
+function buildSummaryCardHTML(countryName, stat, cityCnt) {
+    const avgRank = (stat.totalRank / stat.visits).toFixed(1);
+
+    return `
+        <div class="summary-card">
+            <div class="summary-card-name">${getFlag(countryName)} ${formatPlaceName(countryName)}</div>
+            <div class="summary-card-meta">${UI_TEXT.summary.stay} ${stat.totalDays} 天 &nbsp;·&nbsp; ${UI_TEXT.summary.avgRank} ${avgRank} &nbsp;·&nbsp; ${cityCnt} ${UI_TEXT.summary.cityCountSuffix}</div>
+        </div>
+    `;
+}
+
 function getContinent(cName) {
     const c = standardizeCountry(cName).toLowerCase();
     for (const [continent, countries] of Object.entries(continentMapping)) { if (countries.includes(c)) return continent; }
@@ -90,10 +212,339 @@ function getCountryArea(feature) {
     return countryAreaCache[name];
 }
 const varCSS = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-function formatDateCN(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}年${String(d.getMonth()+1).padStart(2,'0')}月${String(d.getDate()).padStart(2,'0')}日`;
+const toastRoot = document.getElementById('toast-root');
+const appModal = document.getElementById('app-modal');
+const appModalTitle = document.getElementById('app-modal-title');
+const appModalBody = document.getElementById('app-modal-body');
+const appModalActions = document.getElementById('app-modal-actions');
+const appModalClose = document.getElementById('app-modal-close');
+const appModalBackdrop = appModal?.querySelector('[data-close-modal]');
+
+function showToast(message, type = 'info', duration = 2600) {
+    if (!toastRoot) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.textContent = message;
+
+    toastRoot.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 220);
+    }, duration);
+}
+
+function closeAppModal() {
+    if (!appModal) return;
+    appModal.classList.remove('is-open');
+    appModal.setAttribute('aria-hidden', 'true');
+    appModalActions.innerHTML = '';
+}
+
+function openAppModal({ title = '提示', message = '', actions = [] }) {
+    if (!appModal) return;
+
+    appModalTitle.textContent = title;
+    appModalBody.textContent = message;
+    appModalActions.innerHTML = '';
+
+    actions.forEach(action => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = action.className || 'app-modal-btn';
+        btn.textContent = action.label;
+        btn.addEventListener('click', action.onClick);
+        appModalActions.appendChild(btn);
+    });
+
+    appModal.classList.add('is-open');
+    appModal.setAttribute('aria-hidden', 'false');
+}
+
+function showMessageModal({ title = '提示', message = '', confirmText = '知道了' }) {
+    return new Promise(resolve => {
+        openAppModal({
+            title,
+            message,
+            actions: [
+                {
+                    label: confirmText,
+                    className: 'app-modal-btn app-modal-btn--primary',
+                    onClick: () => {
+                        closeAppModal();
+                        resolve(true);
+                    }
+                }
+            ]
+        });
+    });
+}
+
+function showConfirmModal({
+    title = '請確認',
+    message = '',
+    confirmText = '確認',
+    cancelText = '取消',
+    danger = false
+}) {
+    return new Promise(resolve => {
+        openAppModal({
+            title,
+            message,
+            actions: [
+                {
+                    label: cancelText,
+                    className: 'app-modal-btn',
+                    onClick: () => {
+                        closeAppModal();
+                        resolve(false);
+                    }
+                },
+                {
+                    label: confirmText,
+                    className: danger
+                        ? 'app-modal-btn app-modal-btn--danger'
+                        : 'app-modal-btn app-modal-btn--primary',
+                    onClick: () => {
+                        closeAppModal();
+                        resolve(true);
+                    }
+                }
+            ]
+        });
+    });
+}
+
+appModalClose?.addEventListener('click', closeAppModal);
+appModalBackdrop?.addEventListener('click', closeAppModal);
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && appModal?.classList.contains('is-open')) {
+        closeAppModal();
+    }
+});
+
+function getFilteredLocations() {
+    const searchKeyword = (document.getElementById('search-log')?.value || '').toLowerCase();
+    const filterYear = document.getElementById('filter-year')?.value || 'all';
+    const filterContinent = document.getElementById('filter-continent')?.value || 'all';
+
+    return locations.filter(loc => {
+        const c = (loc.country || '').toLowerCase();
+        const r = (loc.region || '').toLowerCase();
+        const locCont = getContinent(loc.country);
+        const locYear = extractYear(loc) || 'none';
+
+        return (c.includes(searchKeyword) || r.includes(searchKeyword))
+            && (filterYear === 'all' || locYear === filterYear)
+            && (filterContinent === 'all' || locCont === filterContinent);
+    });
+}
+
+function updateHeatLayer(sourceLocations = locations) {
+    if (heatLayerGroup) {
+        mapMain.removeLayer(heatLayerGroup);
+        heatLayerGroup = null;
+    }
+
+    const heatPoints = sourceLocations
+        .filter(l => l.lat && l.lng)
+        .map(l => {
+            const days = calculateDays(l.dateStart, l.dateEnd);
+            const rank = parseInt(l.ranking) || 10;
+            return [l.lat, l.lng, days * (1 / rank)];
+        });
+
+    heatLayerGroup = L.heatLayer(heatPoints, {
+        radius: 35,
+        blur: 20,
+        max: 15,
+        maxZoom: 6,
+        gradient: {
+            0.2: 'blue',
+            0.4: 'cyan',
+            0.6: 'lime',
+            0.8: 'yellow',
+            1.0: 'red'
+        }
+    }).addTo(mapMain);
+}
+const chartRegistry = {
+    annual: null,
+    continent: null
+};
+
+function destroyChart(name) {
+    if (chartRegistry[name]) {
+        chartRegistry[name].destroy();
+        chartRegistry[name] = null;
+    }
+}
+
+function getLegendOptions(position = 'top') {
+    return {
+        position,
+        labels: {
+            color: '#6b8aad',
+            font: { family: 'Sora', size: 11 }
+        }
+    };
+}
+
+function getMonoTicks({ size = 10, stepSize } = {}) {
+    return {
+        color: '#6b8aad',
+        ...(stepSize !== undefined ? { stepSize } : {}),
+        font: { family: 'JetBrains Mono', size }
+    };
+}
+
+function getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries) {
+    return {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: '出征次數',
+                    data: dataCounts,
+                    backgroundColor: 'rgba(56,189,248,0.7)',
+                    borderRadius: 4,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'line',
+                    label: '停留天數',
+                    data: dataDays,
+                    borderColor: '#f5c842',
+                    backgroundColor: '#f5c842',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    yAxisID: 'y1'
+                },
+                {
+                    type: 'line',
+                    label: '累積國家數',
+                    data: cumulativeCountries,
+                    borderColor: '#a78bfa',
+                    backgroundColor: '#a78bfa',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 4,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: getLegendOptions()
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    ticks: getMonoTicks({ size: 10, stepSize: 1 }),
+                    grid: { color: 'rgba(56,189,248,0.06)' }
+                },
+                y1: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    ticks: getMonoTicks({ size: 10 }),
+                    grid: { display: false }
+                },
+                x: {
+                    ticks: getMonoTicks({ size: 10 }),
+                    grid: { display: false }
+                }
+            }
+        }
+    };
+}
+
+function getContinentChartConfig(continentCounts) {
+    const continentLabelMap = {
+        Asia: '亞洲',
+        Europe: '歐洲',
+        Americas: '美洲',
+        Oceania: '大洋洲',
+        Africa: '非洲',
+        Other: '其他'
+    };
+
+    const labels = Object.keys(continentCounts).map(c => continentLabelMap[c] || c);
+
+    return {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: Object.values(continentCounts),
+                backgroundColor: ['#38bdf8', '#34d399', '#f5c842', '#f87171', '#a78bfa', '#64748b'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: getLegendOptions('right')
+            }
+        }
+    };
+}
+function setButtonLoading(btn, label, { useHtml = false, opacity = '0.72', background } = {}) {
+    if (!btn) return;
+
+    if (useHtml) btn.innerHTML = label;
+    else btn.innerText = label;
+
+    btn.disabled = true;
+    btn.style.opacity = opacity;
+
+    if (background !== undefined) {
+        btn.style.background = background;
+    }
+}
+
+function setButtonIdle(btn, label, { useHtml = false, opacity = '1', background = '' } = {}) {
+    if (!btn) return;
+
+    if (useHtml) btn.innerHTML = label;
+    else btn.innerText = label;
+
+    btn.disabled = false;
+    btn.style.opacity = opacity;
+    btn.style.background = background;
+}
+
+function syncSubmitButtonUI() {
+    const submitBtn = document.getElementById('submit-btn');
+    const cancelBtn = document.getElementById('cancel-edit-btn');
+
+    if (!submitBtn || !cancelBtn) return;
+
+    if (editingId) {
+        setButtonIdle(submitBtn, UI_TEXT.buttons.submitEdit, {
+            background: 'linear-gradient(135deg,#f5c842,#d97706)'
+        });
+        cancelBtn.style.display = 'block';
+    } else {
+        setButtonIdle(submitBtn, UI_TEXT.buttons.submitCreate, {
+            background: ''
+        });
+        cancelBtn.style.display = 'none';
+    }
 }
 
 // ==========================================
@@ -105,64 +556,107 @@ const countryLayerGroup = L.layerGroup().addTo(mapMain);
 const regionLayerGroup = L.layerGroup();
 let heatLayerGroup = null;
 
-window.switchMode = function(mode) {
+function switchMode(mode) {
     currentMode = mode;
-    ['country','region','heat'].forEach(m => document.getElementById(`btn-mode-${m}`).classList.remove('active'));
-    document.getElementById(`btn-mode-${mode}`).classList.add('active');
-    mapMain.removeLayer(countryLayerGroup); mapMain.removeLayer(regionLayerGroup);
-    if (heatLayerGroup) mapMain.removeLayer(heatLayerGroup);
-    if (mode === 'country') mapMain.addLayer(countryLayerGroup);
-    else if (mode === 'region') mapMain.addLayer(regionLayerGroup);
-    else if (mode === 'heat') {
-        const heatPoints = locations.filter(l => l.lat && l.lng).map(l => {
-            const days = calculateDays(l.dateStart, l.dateEnd);
-            const rank = parseInt(l.ranking) || 10;
-            return [l.lat, l.lng, days * (1/rank)];
-        });
-        heatLayerGroup = L.heatLayer(heatPoints, { radius:35, blur:20, max:15, maxZoom:6, gradient:{0.2:'blue',0.4:'cyan',0.6:'lime',0.8:'yellow',1.0:'red'} }).addTo(mapMain);
+
+    ['country', 'region', 'heat'].forEach(m => {
+        document.getElementById(`btn-mode-${m}`)?.classList.remove('active');
+    });
+    document.getElementById(`btn-mode-${mode}`)?.classList.add('active');
+
+    mapMain.removeLayer(countryLayerGroup);
+    mapMain.removeLayer(regionLayerGroup);
+
+    if (heatLayerGroup) {
+        mapMain.removeLayer(heatLayerGroup);
+        heatLayerGroup = null;
     }
-};
+
+    const filtered = getFilteredLocations();
+
+    if (mode === 'country') {
+        renderMapCountries(filtered);
+        mapMain.addLayer(countryLayerGroup);
+    } else if (mode === 'region') {
+        renderMapRegions(filtered);
+        mapMain.addLayer(regionLayerGroup);
+    } else if (mode === 'heat') {
+        updateHeatLayer(filtered);
+    }
+}
 
 // ==========================================
 // 5. 地圖國家渲染
 // ==========================================
-function renderMapCountries() {
+function renderMapCountries(sourceLocations = locations) {
     if (!worldGeoJSON) return;
+
     countryLayerGroup.clearLayers();
+
     const countryDaysMap = {};
-    locations.forEach(loc => {
-        const cName = (loc.country||'').toLowerCase();
-        countryDaysMap[cName] = (countryDaysMap[cName]||0) + calculateDays(loc.dateStart, loc.dateEnd);
+    sourceLocations.forEach(loc => {
+        const cName = (loc.country || '').toLowerCase();
+        countryDaysMap[cName] = (countryDaysMap[cName] || 0) + calculateDays(loc.dateStart, loc.dateEnd);
     });
+
     const maxDays = Math.max(...Object.values(countryDaysMap), 1);
     let totalExploredAreaKm2 = 0;
+
     L.geoJSON(worldGeoJSON, {
         style: (feature) => {
             const countryName = (feature.properties?.name || feature.properties?.ADMIN || '').toLowerCase();
             const days = countryDaysMap[countryName] || 0;
             const isVisited = days > 0;
+
             if (isVisited) totalExploredAreaKm2 += getCountryArea(feature);
-            let fillColor = varCSS('--country-default'), fillOpacity = 0.2;
+
+            let fillColor = varCSS('--country-default');
+            let fillOpacity = 0.2;
+
             if (isVisited) {
-                fillOpacity = 0.4 + (0.5 * (days/maxDays));
+                fillOpacity = 0.4 + (0.5 * (days / maxDays));
                 fillColor = days > 14 ? '#166534' : (days > 5 ? '#22c55e' : '#4ade80');
             }
-            return { fillColor, weight:1, color: varCSS('--country-border'), fillOpacity };
+
+            return {
+                fillColor,
+                weight: 1,
+                color: varCSS('--country-border'),
+                fillOpacity
+            };
         }
     }).addTo(countryLayerGroup);
-    document.getElementById('explore-percent').innerText = `${((totalExploredAreaKm2/EARTH_LAND_AREA_KM2)*100).toFixed(4)}%`;
-    document.getElementById('explore-area').innerText = `${Math.round(totalExploredAreaKm2).toLocaleString()} km² / 1.48億 km²`;
+
+    document.getElementById('explore-percent').innerText =
+        `${((totalExploredAreaKm2 / EARTH_LAND_AREA_KM2) * 100).toFixed(4)}%`;
+
+    document.getElementById('explore-area').innerText =
+        `${Math.round(totalExploredAreaKm2).toLocaleString()} km² / 1.48億 km²`;
 }
 
-function renderMapRegions() {
+function renderMapRegions(sourceLocations = locations) {
     regionLayerGroup.clearLayers();
-    locations.forEach(loc => {
+
+    sourceLocations.forEach(loc => {
         const days = calculateDays(loc.dateStart, loc.dateEnd);
-        const popupContent = `<strong>${getFlag(loc.country)} ${loc.region}</strong><br>${loc.country}<br>🏆 Vibe 排名: No.${loc.ranking}<br>⏱️ 停留: ${days} 天`;
-        if (loc.geojson && (loc.geojson.type==='Polygon'||loc.geojson.type==='MultiPolygon')) {
-            L.geoJSON(loc.geojson, { style:{ fillColor: varCSS('--cyan'), weight:2, color: varCSS('--cyan'), fillOpacity:0.4 } }).bindPopup(popupContent).addTo(regionLayerGroup);
+        const popupContent = buildRegionPopup(loc, days);
+
+        if (loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon')) {
+            L.geoJSON(loc.geojson, {
+                style: {
+                    fillColor: varCSS('--cyan'),
+                    weight: 2,
+                    color: varCSS('--cyan'),
+                    fillOpacity: 0.4
+                }
+            }).bindPopup(popupContent).addTo(regionLayerGroup);
         } else if (loc.lat && loc.lng) {
-            L.circleMarker([loc.lat,loc.lng], { color: varCSS('--cyan'), fillColor: varCSS('--cyan'), fillOpacity:0.85, radius:7 }).bindPopup(popupContent).addTo(regionLayerGroup);
+            L.circleMarker([loc.lat, loc.lng], {
+                color: varCSS('--cyan'),
+                fillColor: varCSS('--cyan'),
+                fillOpacity: 0.85,
+                radius: 7
+            }).bindPopup(popupContent).addTo(regionLayerGroup);
         }
     });
 }
@@ -170,136 +664,151 @@ function renderMapRegions() {
 // ==========================================
 // 6. Charts
 // ==========================================
-function renderChart(filteredLocs) {
+function renderChart(filteredLocs = locations) {
     const barCanvas = document.getElementById('annualChart');
     const pieCanvas = document.getElementById('continentPieChart');
     if (!barCanvas || !pieCanvas) return;
-    const yearCounts={}, yearDays={}, continentCounts={};
+
+    const yearCounts = {};
+    const yearDays = {};
+    const continentCounts = {};
+
     filteredLocs.forEach(loc => {
         const days = calculateDays(loc.dateStart, loc.dateEnd);
-        const y = extractYear(loc)||'未知';
-        yearCounts[y] = (yearCounts[y]||0)+1; yearDays[y] = (yearDays[y]||0)+days;
-        const cont = getContinent(loc.country); continentCounts[cont] = (continentCounts[cont]||0)+1;
+        const y = extractYear(loc) || '未知';
+
+        yearCounts[y] = (yearCounts[y] || 0) + 1;
+        yearDays[y] = (yearDays[y] || 0) + days;
+
+        const cont = getContinent(loc.country);
+        continentCounts[cont] = (continentCounts[cont] || 0) + 1;
     });
-    const labels = Object.keys(yearCounts).filter(y=>y!=='未知').sort();
-    const dataCounts = labels.map(y=>yearCounts[y]);
-    const dataDays = labels.map(y=>yearDays[y]);
+
+    const labels = Object.keys(yearCounts).filter(y => y !== '未知').sort();
+    const dataCounts = labels.map(y => yearCounts[y]);
+    const dataDays = labels.map(y => yearDays[y]);
+
     const cumulativeCountries = labels.map(year => {
-        const locsUp = locations.filter(l => { let ly=extractYear(l); return ly && ly<=year; });
-        return new Set(locsUp.map(l=>(l.country||'').toLowerCase())).size;
+        const locsUp = filteredLocs.filter(l => {
+            const ly = extractYear(l);
+            return ly && ly <= year;
+        });
+        return new Set(locsUp.map(l => (l.country || '').toLowerCase())).size;
     });
-    if (window.chartBar) window.chartBar.destroy();
-    window.chartBar = new Chart(barCanvas.getContext('2d'), {
-        type:'bar',
-        data:{ labels, datasets:[
-            { type:'bar', label:'出征次數', data:dataCounts, backgroundColor:'rgba(56,189,248,0.7)', borderRadius:4, yAxisID:'y' },
-            { type:'line', label:'停留天數', data:dataDays, borderColor:'#f5c842', backgroundColor:'#f5c842', borderWidth:2, pointRadius:4, yAxisID:'y1' },
-            { type:'line', label:'累積國家數', data:cumulativeCountries, borderColor:'#a78bfa', backgroundColor:'#a78bfa', borderWidth:2, borderDash:[5,5], pointRadius:4, yAxisID:'y' }
-        ]},
-        options:{
-            responsive:true, maintainAspectRatio:false,
-            plugins:{ legend:{ labels:{ color:'#6b8aad', font:{ family:'Sora', size:11 } } } },
-            scales:{
-                y:{ type:'linear', position:'left', beginAtZero:true, ticks:{ color:'#6b8aad', stepSize:1, font:{family:'JetBrains Mono',size:10} }, grid:{ color:'rgba(56,189,248,0.06)' } },
-                y1:{ type:'linear', position:'right', beginAtZero:true, ticks:{ color:'#6b8aad', font:{family:'JetBrains Mono',size:10} }, grid:{ display:false } },
-                x:{ ticks:{ color:'#6b8aad', font:{family:'JetBrains Mono',size:10} }, grid:{ display:false } }
-            }
-        }
-    });
-    const contLabels = Object.keys(continentCounts).map(c=>({'Asia':'亞洲','Europe':'歐洲','Americas':'美洲','Oceania':'大洋洲','Africa':'非洲','Other':'其他'}[c]||c));
-    if (window.chartPie) window.chartPie.destroy();
-    window.chartPie = new Chart(pieCanvas.getContext('2d'), {
-        type:'doughnut',
-        data:{ labels:contLabels, datasets:[{ data:Object.values(continentCounts), backgroundColor:['#38bdf8','#34d399','#f5c842','#f87171','#a78bfa','#64748b'], borderWidth:0 }] },
-        options:{ responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{ position:'right', labels:{ color:'#6b8aad', font:{family:'Sora',size:11}, boxWidth:12 } } } }
-    });
+
+    destroyChart('annual');
+    chartRegistry.annual = new Chart(
+        barCanvas.getContext('2d'),
+        getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
+    );
+
+    destroyChart('continent');
+    chartRegistry.continent = new Chart(
+        pieCanvas.getContext('2d'),
+        getContinentChartConfig(continentCounts)
+    );
 }
 
 // ==========================================
 // 7. UI 渲染
 // ==========================================
-function renderUI() {
+function renderUI(filteredLocations = getFilteredLocations()) {
     const list = document.getElementById('log-list');
     const summaryList = document.getElementById('country-summary-list');
     if (!list || !summaryList) return;
-    list.innerHTML = ''; summaryList.innerHTML = '';
 
-    const searchKeyword = (document.getElementById('search-log')?.value||'').toLowerCase();
-    const filterYear = document.getElementById('filter-year')?.value||'all';
-    const filterContinent = document.getElementById('filter-continent')?.value||'all';
-    const sortBy = document.getElementById('sort-by')?.value||'date';
+    list.innerHTML = '';
+    summaryList.innerHTML = '';
 
-    const years = new Set(locations.map(l=>extractYear(l)).filter(y=>y!==null));
+    const sortBy = document.getElementById('sort-by')?.value || 'date';
+
+    const years = new Set(locations.map(l => extractYear(l)).filter(y => y !== null));
     const yearSelect = document.getElementById('filter-year');
+
     if (yearSelect) {
         const cur = yearSelect.value;
         yearSelect.innerHTML = '<option value="all">所有年份</option>';
+
         [...years].sort().reverse().forEach(year => {
-            const o = document.createElement('option'); o.value=year; o.text=`${year} 年`; yearSelect.appendChild(o);
+            const o = document.createElement('option');
+            o.value = year;
+            o.text = `${year} 年`;
+            yearSelect.appendChild(o);
         });
-        if (Array.from(yearSelect.options).some(o=>o.value===cur)) yearSelect.value=cur;
+
+        if (Array.from(yearSelect.options).some(o => o.value === cur)) {
+            yearSelect.value = cur;
+        }
     }
 
-    const filteredLocations = locations.filter(loc => {
-        const c=(loc.country||'').toLowerCase(), r=(loc.region||'').toLowerCase();
-        const locCont=getContinent(loc.country), locYear=extractYear(loc)||'none';
-        return (c.includes(searchKeyword)||r.includes(searchKeyword)) && (filterYear==='all'||locYear===filterYear) && (filterContinent==='all'||locCont===filterContinent);
-    });
+    const countriesData = {};
+    const uniqueCities = new Set();
+    let totalDaysAll = 0;
 
-    const countriesData={}, uniqueCities=new Set(); let totalDaysAll=0;
     filteredLocations.forEach(loc => {
-        const days=calculateDays(loc.dateStart,loc.dateEnd);
-        const cName=loc.country.toUpperCase(), rank=parseInt(loc.ranking)||10;
-        if(!countriesData[cName]) countriesData[cName]={totalDays:0,visits:0,totalRank:0};
-        countriesData[cName].totalDays+=days; countriesData[cName].visits+=1; countriesData[cName].totalRank+=rank;
-        totalDaysAll+=days;
-        uniqueCities.add(`${cName}_${loc.region.toLowerCase()}`);
+        const days = calculateDays(loc.dateStart, loc.dateEnd);
+        const cName = formatPlaceName(loc.country || '未知國家');
+        const rank = parseInt(loc.ranking) || 10;
+
+        if (!countriesData[cName]) {
+            countriesData[cName] = { totalDays: 0, visits: 0, totalRank: 0 };
+        }
+
+        countriesData[cName].totalDays += days;
+        countriesData[cName].visits += 1;
+        countriesData[cName].totalRank += rank;
+        totalDaysAll += days;
+
+        uniqueCities.add(`${cName}_${(loc.region || '').toLowerCase()}`);
     });
 
-    Object.keys(countriesData).sort((a,b)=>countriesData[b].totalDays-countriesData[a].totalDays).forEach(c => {
-        const stat=countriesData[c], avgRank=(stat.totalRank/stat.visits).toFixed(1);
-        const cityCnt=Array.from(uniqueCities).filter(city=>city.startsWith(`${c}_`)).length;
-        summaryList.innerHTML += `
-            <div class="summary-card">
-                <div class="summary-card-name">${getFlag(c)} ${c}</div>
-                <div class="summary-card-meta">停留 ${stat.totalDays} 天 &nbsp;·&nbsp; 排名均值 ${avgRank} &nbsp;·&nbsp; ${cityCnt} 座城市</div>
-            </div>`;
+    Object.keys(countriesData)
+    .sort((a, b) => countriesData[b].totalDays - countriesData[a].totalDays)
+    .forEach(c => {
+        const stat = countriesData[c];
+        const cityCnt = Array.from(uniqueCities).filter(city => city.startsWith(`${c}_`)).length;
+
+        summaryList.innerHTML += buildSummaryCardHTML(c, stat, cityCnt);
     });
 
-    let hhi=0, entropy=0;
+    let hhi = 0;
+    let entropy = 0;
+
     Object.values(countriesData).forEach(c => {
-        if(totalDaysAll>0){ const p=c.totalDays/totalDaysAll; hhi+=Math.pow(p,2); entropy-=p*Math.log2(p); }
+        if (totalDaysAll > 0) {
+            const p = c.totalDays / totalDaysAll;
+            hhi += Math.pow(p, 2);
+            entropy -= p * Math.log2(p);
+        }
     });
-    const concentrationText = hhi>=0.25?"高度集中":(hhi>=0.15?"中度集中":"高度分散");
-    document.getElementById('exposure-continent').innerText = hhi>0?hhi.toFixed(2):"0.00";
-    document.getElementById('exposure-country').innerText = totalDaysAll>0?`${concentrationText} (H: ${entropy.toFixed(2)})`:"無資料";
+
+    const concentrationText =
+        hhi >= 0.25 ? '高度集中' :
+        hhi >= 0.15 ? '中度集中' :
+        '高度分散';
+
+    document.getElementById('exposure-continent').innerText = hhi > 0 ? hhi.toFixed(2) : '0.00';
+    document.getElementById('exposure-country').innerText =
+        totalDaysAll > 0 ? `${concentrationText} (H: ${entropy.toFixed(2)})` : '無資料';
 
     renderChart(filteredLocations);
 
-    const sorted = [...filteredLocations].sort((a,b) => {
-        if(sortBy==='rank') return parseInt(a.ranking||999)-parseInt(b.ranking||999);
-        const ta=a.dateStart?new Date(a.dateStart).getTime():a.id;
-        const tb=b.dateStart?new Date(b.dateStart).getTime():b.id;
-        return tb-ta;
+    const sorted = [...filteredLocations].sort((a, b) => {
+        if (sortBy === 'rank') {
+            return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
+        }
+
+        const ta = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
+        const tb = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
+        return tb - ta;
     });
+
     sorted.forEach(loc => {
-        const days=calculateDays(loc.dateStart,loc.dateEnd);
-        const li=document.createElement('li');
-        li.className=`log-item ${editingId===loc.id?'editing':''}`;
-        li.innerHTML=`
-            <div class="log-item-info">
-                <div class="log-item-top">
-                    <span class="badge-country">${getFlag(loc.country)} ${loc.country}</span>
-                    <span class="badge-region">${loc.region}</span>
-                    <span class="badge-rank">No.${loc.ranking}</span>
-                    <span class="badge-days">${days}天</span>
-                </div>
-                <div class="log-date">📅 ${loc.dateRange||'未紀錄'}</div>
-            </div>
-            <div class="action-group">
-                <button class="action-btn edit-btn" onclick="editLocation(${loc.id})">編輯</button>
-                <button class="action-btn delete-btn" onclick="deleteLocation(${loc.id})">刪除</button>
-            </div>`;
+        const days = calculateDays(loc.dateStart, loc.dateEnd);
+        const li = document.createElement('li');
+        li.className = `log-item ${editingId === loc.id ? 'editing' : ''}`;
+
+       li.innerHTML = buildLogItemHTML(loc, days);
         list.appendChild(li);
     });
 
@@ -308,13 +817,38 @@ function renderUI() {
 }
 
 ['search-log','filter-year','filter-continent','sort-by'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', renderUI);
-    document.getElementById(id)?.addEventListener('change', renderUI);
+    document.getElementById(id)?.addEventListener('input', renderAll);
+    document.getElementById(id)?.addEventListener('change', renderAll);
+});
+
+document.getElementById('log-list')?.addEventListener('click', async function(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const id = Number(btn.dataset.id);
+    const action = btn.dataset.action;
+
+    if (action === 'edit') {
+        editLocation(id);
+    } else if (action === 'delete') {
+        await deleteLocation(id);
+    }
 });
 
 function renderAll() {
-    renderUI(); renderMapCountries(); renderMapRegions();
-    if(currentMode==='heat') switchMode('heat');
+    const filtered = getFilteredLocations();
+
+    renderUI(filtered);
+    renderMapCountries(filtered);
+    renderMapRegions(filtered);
+
+    if (currentMode === 'heat') {
+        updateHeatLayer(filtered);
+    } else if (currentMode === 'country') {
+        mapMain.addLayer(countryLayerGroup);
+    } else if (currentMode === 'region') {
+        mapMain.addLayer(regionLayerGroup);
+    }
 }
 
 // ==========================================
@@ -372,77 +906,138 @@ async function fetchRegionBoundary(region, country) {
 
 document.getElementById('tracker-form')?.addEventListener('submit', async function(e) {
     e.preventDefault();
-    const submitBtn=document.getElementById('submit-btn');
-    submitBtn.innerText='🛰️ 衛星掃描中...'; submitBtn.disabled=true;
-    const dStart=dateStartEl.value, dEnd=dateEndEl.value;
-    const dateRangeStr=`${formatDateCN(dStart)} 到 ${formatDateCN(dEnd)}`;
-    const geoData=await fetchRegionBoundary(regionInput.value.trim(), standardizeCountry(countryInput.value));
-    if(!geoData){ alert(`⚠️ 找不到地理資料，請確認拼寫是否正確。`); submitBtn.innerText=editingId?'儲存變更 💾':'🚀 空降新領地'; submitBtn.disabled=false; return; }
-    const newLog={
-        id: editingId||(new Date(dStart).getTime()+Math.floor(Math.random()*1000)),
-        date_start:dStart, date_end:dEnd, date_range:dateRangeStr,
-        country:standardizeCountry(countryInput.value), region:regionInput.value.trim(),
-        ranking:document.getElementById('input-ranking').value,
-        lat:geoData.lat, lng:geoData.lng, geojson:geoData.geojson
+
+    const formatDateLocal = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return `${d.getFullYear()}年${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
     };
+
+    const submitBtn = document.getElementById('submit-btn');
+    setButtonLoading(submitBtn, UI_TEXT.buttons.submitLoading);
+
+    const dStart = dateStartEl.value;
+    const dEnd = dateEndEl.value;
+    const dateRangeStr = `${formatDateLocal(dStart)} 到 ${formatDateLocal(dEnd)}`;
+    const geoData=await fetchRegionBoundary(regionInput.value.trim(), standardizeCountry(countryInput.value));
+    if (!geoData) {
+    showToast(UI_TEXT.toast.geoNotFound, 'error', 3200);
+    syncSubmitButtonUI();
+    return;
+}
+    const normalizedCountry = formatPlaceName(standardizeCountry(countryInput.value));
+const normalizedRegion = formatPlaceName(regionInput.value.trim());
+
+const newLog = {
+    id: editingId || (new Date(dStart).getTime() + Math.floor(Math.random() * 1000)),
+    date_start: dStart,
+    date_end: dEnd,
+    date_range: dateRangeStr,
+    country: normalizedCountry,
+    region: normalizedRegion,
+    ranking: document.getElementById('input-ranking').value,
+    lat: geoData.lat,
+    lng: geoData.lng,
+    geojson: geoData.geojson
+};
     const { error }=await supabaseClient.from('travel_logs').upsert([newLog]);
-    if(error){ alert(`❌ 寫入失敗: ${error.message}`); }
+    if (error) {
+    showToast(`寫入失敗：${error.message}`, 'error', 3600);
+}
     else {
-        const locObj={...newLog, dateStart:dStart, dateEnd:dEnd, dateRange:dateRangeStr};
-        if(editingId){ const idx=locations.findIndex(l=>l.id===editingId); if(idx!==-1) locations[idx]=locObj; cancelEdit(); }
-        else { locations.push(locObj); submitBtn.innerText='🚀 空降新領地'; this.reset(); }
-        renderAll(); mapMain.flyTo([geoData.lat,geoData.lng], currentMode==='country'?4:6);
+    const locObj = { ...newLog, dateStart: dStart, dateEnd: dEnd, dateRange: dateRangeStr };
+
+    if (editingId) {
+        const idx = locations.findIndex(l => l.id === editingId);
+        if (idx !== -1) locations[idx] = locObj;
+        cancelEdit();
+    } else {
+        locations.push(locObj);
+        this.reset();
+        editingId = null;
+        syncSubmitButtonUI();
     }
-    submitBtn.disabled=false;
+
+    renderAll();
+    mapMain.flyTo([geoData.lat, geoData.lng], currentMode === 'country' ? 4 : 6);
+}
+
+syncSubmitButtonUI();
 });
 
-window.editLocation=function(id){
+function editLocation(id) {
     const loc=locations.find(l=>l.id===id); if(!loc) return;
     countryInput.value=loc.country; regionInput.value=loc.region;
     dateStartEl.value=loc.dateStart||''; dateEndEl.value=loc.dateEnd||'';
     document.getElementById('input-ranking').value=loc.ranking||'';
     editingId=id;
-    const sb=document.getElementById('submit-btn');
-    sb.innerText='💾 儲存變更'; sb.style.background='linear-gradient(135deg,#f5c842,#d97706)';
-    document.getElementById('cancel-edit-btn').style.display='block';
+    syncSubmitButtonUI();
     renderUI(); document.getElementById('tracker-form').scrollIntoView({ behavior:'smooth' });
-};
-window.cancelEdit=function(){
-    editingId=null; document.getElementById('tracker-form').reset();
-    const sb=document.getElementById('submit-btn');
-    sb.innerText='🚀 空降新領地'; sb.style.background='';
-    document.getElementById('cancel-edit-btn').style.display='none';
-    renderUI();
-};
-window.deleteLocation=async function(id){
-    if(!confirm('確定要刪除這筆戰報嗎？')) return;
-    const { error }=await supabaseClient.from('travel_logs').delete().eq('id',id);
-    if(error){ alert(`❌ 刪除失敗: ${error.message}`); }
-    else { locations=locations.filter(l=>l.id!==id); if(editingId===id) cancelEdit(); renderAll(); }
-};
+}
 
-window.importData=function(event){
+function cancelEdit() {
+    editingId = null;
+    document.getElementById('tracker-form').reset();
+    syncSubmitButtonUI();
+    renderUI();
+}
+async function deleteLocation(id) {
+    const confirmed = await showConfirmModal({
+        title: UI_TEXT.modal.confirmDeleteTitle,
+message: UI_TEXT.modal.confirmDeleteMessage,
+confirmText: UI_TEXT.modal.confirmDeleteYes,
+cancelText: UI_TEXT.modal.confirmDeleteNo,
+        danger: true
+    });
+
+    if (!confirmed) return;
+
+    const { error } = await supabaseClient.from('travel_logs').delete().eq('id', id);
+
+    if (error) {
+        showToast(`刪除失敗：${error.message}`, 'error', 3600);
+    } else {
+        locations = locations.filter(l => l.id !== id);
+        if (editingId === id) cancelEdit();
+        renderAll();
+        showToast(UI_TEXT.toast.deleteDone, 'success');
+    }
+}
+
+function importData(event) {
     const file=event.target.files[0]; if(!file) return;
     const reader=new FileReader();
     reader.onload=async function(e){
         try {
             const importedData=JSON.parse(e.target.result);
             if(Array.isArray(importedData)){
-                const btn=document.querySelector('button[onclick="document.getElementById(\'import-file\').click()"]');
-                const orig=btn.innerText; btn.innerText='☁️ 上傳中...'; btn.disabled=true;
+                const btn = document.getElementById('btn-import-open');
+                setButtonLoading(btn, UI_TEXT.buttons.importLoading);
                 const payload=importedData.map(l=>({ id:l.id, date_start:l.dateStart||'', date_end:l.dateEnd||'', date_range:l.dateRange||'', country:l.country, region:l.region, ranking:l.ranking||l.rating||10, lat:l.lat, lng:l.lng, geojson:l.geojson }));
                 const { error }=await supabaseClient.from('travel_logs').upsert(payload);
-                if(error){ alert(`❌ 匯入失敗: ${error.message}`); }
-                else { locations=importedData; renderAll(); alert(`✅ 成功匯入 ${importedData.length} 筆戰報！`); }
-                btn.innerText=orig; btn.disabled=false;
-            } else { alert("⚠️ JSON 格式有誤，必須是陣列格式。"); }
-        } catch(err){ alert("⚠️ 檔案解析失敗"); }
+                if (error) {
+    showToast(`匯入失敗：${error.message}`, 'error', 3600);
+} else {
+    locations = importedData;
+    renderAll();
+    showToast(`成功匯入 ${importedData.length} 筆戰報。`, 'success', 3000);
+}
+setButtonIdle(btn, UI_TEXT.buttons.importIdle);
+} else {
+    showToast(UI_TEXT.toast.importFormatError, 'warning', 3200);
+}
+} catch(err) {
+    showToast(UI_TEXT.toast.importParseError, 'error', 3200);
+}
     };
     reader.readAsText(file); event.target.value='';
-};
+}
 
-window.exportData=function(type){
-    if(locations.length===0) return alert("尚未佔領任何領地！");
+function exportData(type) {
+    if (locations.length === 0) {
+    showToast(UI_TEXT.toast.noExportData, 'warning', 2800);
+    return;
+}
     let dataStr, mimeType, extension;
     if(type==='json'){ dataStr=JSON.stringify(locations,null,2); mimeType="application/json"; extension="json"; }
     else if(type==='csv'){
@@ -453,18 +1048,21 @@ window.exportData=function(type){
     }
     const blob=new Blob([dataStr],{type:mimeType}), url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url; a.download=`travel_log.${extension}`; a.click(); URL.revokeObjectURL(url);
-};
+}
 
-window.playTimeline=async function(){
+async function playTimeline() {
     const validLocs=[...locations].filter(l=>l.lat&&l.lng&&extractYear(l)).sort((a,b)=>{
         const ta=a.dateStart?new Date(a.dateStart).getTime():a.id;
         const tb=b.dateStart?new Date(b.dateStart).getTime():b.id;
         return ta-tb;
     });
-    if(validLocs.length===0) return alert('無包含日期的戰報可推演！');
+    if (validLocs.length === 0) {
+    showToast(UI_TEXT.toast.noTimelineData, 'warning', 3000);
+    return;
+}
     switchMode('region'); regionLayerGroup.clearLayers();
-    const btn=document.querySelector('button[onclick="playTimeline()"]');
-    btn.innerText='推演中... ⏳'; btn.disabled=true;
+    const btn = document.getElementById('btn-timeline');
+    setButtonLoading(btn, UI_TEXT.buttons.timelineLoading, { opacity: '1' });
     const finalPathLine=L.polyline([],{color:'#f5c842',weight:3,opacity:0.8}).addTo(regionLayerGroup);
     const animatingPathLine=L.polyline([],{color:'#f5c842',weight:3,dashArray:'5,8',opacity:0.9}).addTo(regionLayerGroup);
     const personIcon=L.divIcon({ html:'<div style="font-size:28px;text-shadow:2px 2px 4px rgba(0,0,0,0.6);transform:scaleX(-1);">🚶‍♂️</div>', className:'', iconSize:[28,28], iconAnchor:[14,28] });
@@ -503,27 +1101,30 @@ window.playTimeline=async function(){
             completedPath.push(next); finalPathLine.setLatLngs(completedPath);
         }
         L.circleMarker([targetLat,currentContinuousLng],{color:'#f5c842',fillColor:'#f5c842',fillOpacity:0.9,radius:8})
-         .bindPopup(`<strong>${getFlag(loc.country)} ${loc.region}</strong><br>📅 ${loc.dateRange||loc.dateStart}`)
+         .bindPopup(buildTimelinePopup(loc))
          .addTo(regionLayerGroup).openPopup();
         await new Promise(r=>setTimeout(r,1000));
     }
-    alert('✅ 戰略推演完畢！');
-    btn.innerText='▶ 軌跡推演'; btn.disabled=false; renderMapRegions();
-};
+    showToast(UI_TEXT.toast.timelineDone, 'success', 2600);
+    setButtonIdle(btn, UI_TEXT.buttons.timelineIdle);
+    renderMapRegions();
+}
 
 // ==========================================
 // 🚀 真 AI 戰略預測引擎 (對接 Render 雲端後端)
 // ==========================================
-window.recommendNext = async function() {
-    if (locations.length === 0) return alert('請先輸入戰報，AI 才能進行偏好分析！');
+async function recommendNext() {
+    if (locations.length === 0) {
+    showToast(UI_TEXT.toast.aiNoData, 'warning', 3200);
+    return;
+}
 
-    const btn = document.querySelector('.btn-ai');
-    const originalText = btn.innerHTML;
-    
-    // UI 狀態切換
-    btn.innerHTML = '🧠 神經網絡演算中...';
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
+    const btn = document.getElementById('btn-ai');
+const originalText = btn.innerHTML;
+
+setButtonLoading(btn, UI_TEXT.buttons.aiLoading, {
+    useHtml: true
+});
 
     // 1. 整理戰報數據，精簡傳給後端的 payload
     const payload = locations.map(l => ({
@@ -550,30 +1151,34 @@ window.recommendNext = async function() {
         const aiResult = await response.json();
 
         // 3. 展示 AI 運算結果
-        const msg = `🤖 [AI 戰略預測分析]
+        const msg = `${UI_TEXT.ai.header}
 
-🔍 偏好解析：
+${UI_TEXT.ai.analysis}
 ${aiResult.analysis}
 
-🎯 建議空降座標：
+${UI_TEXT.ai.target}
 【 ${getFlagText(aiResult.recommend_country)} ${aiResult.recommend_country} - ${aiResult.recommend_city} 】
 
-📝 戰略理由：
+${UI_TEXT.ai.reason}
 ${aiResult.reason}`;
 
-        alert(msg);
+        await showMessageModal({
+    title: UI_TEXT.modal.aiTitle,
+    message: msg,
+    confirmText: UI_TEXT.modal.aiClose
+});
 
     } catch (error) {
         console.error('AI 請求失敗:', error);
         // 修改錯誤提示，提醒休眠狀態
-        alert('⚠️ 無法連線至雲端戰略中樞，伺服器可能正在從休眠中喚醒，請稍等 30 秒後再試一次！');
+        showToast(UI_TEXT.toast.aiUnavailable, 'error', 4200);
     } finally {
         // 恢復 UI 狀態
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-        btn.style.opacity = '1';
+       setButtonIdle(btn, originalText, {
+    useHtml: true
+});
     }
-};
+}
 
 // ==========================================
 // 🔒 Auth & Session Management (登入閘門)
@@ -624,6 +1229,27 @@ function hideLoginOverlay() {
     overlay.style.opacity = '0';
     setTimeout(() => { overlay.style.display = 'none'; }, 300);
 }
+document.getElementById('loginForm')?.addEventListener('submit', handleLogin);
+
+document.getElementById('cancel-edit-btn')?.addEventListener('click', cancelEdit);
+
+document.getElementById('btn-mode-country')?.addEventListener('click', () => switchMode('country'));
+document.getElementById('btn-mode-region')?.addEventListener('click', () => switchMode('region'));
+document.getElementById('btn-mode-heat')?.addEventListener('click', () => switchMode('heat'));
+
+document.getElementById('btn-timeline')?.addEventListener('click', playTimeline);
+document.getElementById('btn-ai')?.addEventListener('click', recommendNext);
+
+document.getElementById('btn-export-json')?.addEventListener('click', () => exportData('json'));
+document.getElementById('btn-export-csv')?.addEventListener('click', () => exportData('csv'));
+
+document.getElementById('btn-import-open')?.addEventListener('click', () => {
+    document.getElementById('import-file')?.click();
+});
+
+document.getElementById('import-file')?.addEventListener('change', importData);
+
+document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
 
 // 🚀 網頁載入後的第一個動作：從檢查權限開始！
 document.addEventListener('DOMContentLoaded', checkAuth);

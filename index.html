@@ -26,7 +26,7 @@
                 <h2 style="font-family: 'Rajdhani', sans-serif; font-size: 1.8rem; color: var(--cyan); letter-spacing: 2px;">STRATEGIC COMMAND</h2>
                 <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sub); letter-spacing: 3px; margin-top: 5px;">SECURE ACCESS ONLY</div>
             </div>
-            <form id="loginForm" onsubmit="handleLogin(event)">
+            <form id="loginForm">
                 <div class="input-group">
                     <div class="field-label">EMAIL 認證信箱</div>
                     <input type="email" id="login-email" required placeholder="Enter your email">
@@ -46,63 +46,8 @@
             <header>
                 <p class="header-eyebrow">Strategic Travel Command</p>
                 <h1>🌍 旅遊紀錄</h1>
-                <p class="header-sub">解鎖版圖 · 分析軌跡 · 預測下一站</p>
+                <p class="header-sub">先看地圖，再輸入旅遊與分析</p>
             </header>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">解鎖國家</div>
-                    <div class="stat-number" id="count-country">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">探索世界進度</div>
-                    <div class="stat-number" id="explore-percent">0.00%</div>
-                    <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">解鎖據點總數</div>
-                    <div class="stat-number" id="count-region">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">旅行分散度 HHI</div>
-                    <div class="stat-number gold" id="exposure-continent">0.00</div>
-                    <div class="sub-text" id="exposure-country">評估中...</div>
-                </div>
-            </div>
-
-            <div class="chart-wrapper">
-                <div class="chart-container">
-                    <div class="chart-title">▸ 年度出征統計</div>
-                    <div class="chart-canvas-wrap"><canvas id="annualChart"></canvas></div>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title">▸ 洲別分布</div>
-                    <div class="chart-canvas-wrap"><canvas id="continentPieChart"></canvas></div>
-                </div>
-            </div>
-
-            <div class="toolbar">
-                <div class="toolbar-row">
-                    <button class="btn-data" onclick="exportData('json')">💾 備份 JSON</button>
-                    <button class="btn-data" onclick="exportData('csv')">📊 匯出 CSV</button>
-                    <button class="btn-data" onclick="document.getElementById('import-file').click()">📂 匯入舊版 JSON</button>
-                    <input type="file" id="import-file" style="display:none;" accept=".json" onchange="importData(event)">
-
-                    <div class="toolbar-divider"></div>
-
-                    <div class="mode-pills">
-                        <button id="btn-mode-country" class="mode-pill active" onclick="switchMode('country')">🗺️ 國家</button>
-                        <button id="btn-mode-region" class="mode-pill" onclick="switchMode('region')">💠 據點</button>
-                        <button id="btn-mode-heat" class="mode-pill" onclick="switchMode('heat')">🔥 熱區</button>
-                    </div>
-
-                    <div class="toolbar-divider"></div>
-
-                    <button class="btn-timeline" onclick="playTimeline()">▶ 軌跡推演</button>
-                    <button class="btn-ai" onclick="recommendNext()">✦ AI 戰略預測</button>
-                    <button class="btn-data" style="color: var(--red); border-color: rgba(248,113,113,0.3);" onclick="handleLogout()">🚪 撤離系統 (Logout)</button>
-                </div>
-            </div>
 
             <div class="map-container">
                 <div class="map-statusbar">
@@ -110,24 +55,44 @@
                     <span>LIVE MAP</span>
                     <span style="color:var(--border-bright)">|</span>
                     <span>OpenStreetMap · CartoDB Dark</span>
+
+                    <div class="mode-pills" style="margin-left:auto;">
+                        <button id="btn-mode-country" class="mode-pill active">🗺️ 國家</button>
+                        <button id="btn-mode-region" class="mode-pill">💠 據點</button>
+                        <button id="btn-mode-heat" class="mode-pill">🔥 熱區</button>
+                    </div>
                 </div>
                 <div id="map-main" class="map-box"></div>
             </div>
 
+            <div class="toolbar">
+                <div class="toolbar-row">
+                    <button id="btn-timeline" class="btn-timeline">▶ 軌跡推演</button>
+<button id="btn-ai" class="btn-ai">✦ AI 戰略預測</button>
+<button id="btn-export-json" class="btn-data">💾 備份 JSON</button>
+<button id="btn-export-csv" class="btn-data">📊 匯出 CSV</button>
+<button id="btn-import-open" class="btn-data">📂 匯入舊版 JSON</button>
+<button id="btn-logout" class="btn-data" style="color: var(--red); border-color: rgba(248,113,113,0.3);">🚪 登出</button>
+<input type="file" id="import-file" style="display:none;" accept=".json">
+                </div>
+            </div>
+
             <div class="bottom-grid">
                 <div class="control-panel">
-                    <div class="panel-title"><span class="panel-title-icon">🚀</span> 空降新領地</div>
+                    <div class="panel-title"><span class="panel-title-icon">🚀</span> 快速新增旅遊</div>
                     <form id="tracker-form" autocomplete="off">
                         <div class="input-group">
-                            <div>
-                                <div class="field-label">國家</div>
-                                <input type="text" id="input-country" placeholder="自動帶入或手填" required>
-                            </div>
                             <div class="field-wrap">
-                                <div class="field-label">省 / 州 / 城市</div>
-                                <input type="text" id="input-region" placeholder="輸入英文自動搜尋" required>
+                                <div class="field-label">城市 / 地點</div>
+                                <input type="text" id="input-region" placeholder="先輸入城市英文，例如 Tokyo" required>
                                 <div id="autocomplete-list" class="autocomplete-items"></div>
                             </div>
+
+                            <div>
+                                <div class="field-label">國家</div>
+                                <input type="text" id="input-country" placeholder="系統自動帶入，也可手填" required>
+                            </div>
+
                             <div class="date-row">
                                 <div>
                                     <div class="field-label">起始日</div>
@@ -138,13 +103,15 @@
                                     <input type="date" id="input-date-end" required>
                                 </div>
                             </div>
+
                             <div>
                                 <div class="field-label">Vibe 排名</div>
-                                <input type="number" id="input-ranking" min="1" placeholder="1 = 心目中第一名" required>
+                                <input type="number" id="input-ranking" min="1" placeholder="1 = 最喜歡" required>
                             </div>
                         </div>
+
                         <button type="submit" id="submit-btn" class="btn-submit">🚀 空降新領地</button>
-                        <button type="button" id="cancel-edit-btn" class="btn-cancel" onclick="cancelEdit()">✕ 取消編輯</button>
+                        <button type="button" id="cancel-edit-btn" class="btn-cancel">✕ 取消編輯</button>
                     </form>
                 </div>
 
@@ -161,7 +128,9 @@
                                 <option value="Oceania">大洋洲</option>
                                 <option value="Africa">非洲</option>
                             </select>
-                            <select class="filter-select" id="filter-year"><option value="all">所有年份</option></select>
+                            <select class="filter-select" id="filter-year">
+                                <option value="all">所有年份</option>
+                            </select>
                             <select class="filter-select" id="sort-by">
                                 <option value="date">出征日期</option>
                                 <option value="rank">Vibe 排名</option>
@@ -173,9 +142,72 @@
                     <ul class="log-list" id="log-list"></ul>
                 </div>
             </div>
+
+            <details class="secondary-panel">
+    <summary class="secondary-panel-summary">
+        <span>📊 統計摘要</span>
+        <span class="secondary-panel-hint">點開查看</span>
+    </summary>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">解鎖國家</div>
+            <div class="stat-number" id="count-country">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">探索世界進度</div>
+            <div class="stat-number" id="explore-percent">0.00%</div>
+            <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">解鎖據點總數</div>
+            <div class="stat-number" id="count-region">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">旅行分散度 HHI</div>
+            <div class="stat-number gold" id="exposure-continent">0.00</div>
+            <div class="sub-text" id="exposure-country">評估中...</div>
+        </div>
+    </div>
+</details>
+
+            <details class="secondary-panel">
+    <summary class="secondary-panel-summary">
+        <span>📈 圖表分析</span>
+        <span class="secondary-panel-hint">點開查看</span>
+    </summary>
+
+    <div class="chart-wrapper">
+        <div class="chart-container">
+            <div class="chart-title">▸ 年度出征統計</div>
+            <div class="chart-canvas-wrap"><canvas id="annualChart"></canvas></div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title">▸ 洲別分布</div>
+            <div class="chart-canvas-wrap"><canvas id="continentPieChart"></canvas></div>
+        </div>
+    </div>
+</details>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <div id="toast-root" class="toast-root"></div>
+
+<div id="app-modal" class="app-modal" aria-hidden="true">
+    <div class="app-modal-backdrop" data-close-modal></div>
+
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+        <div class="app-modal-header">
+            <h3 id="app-modal-title">提示</h3>
+            <button type="button" id="app-modal-close" class="app-modal-close">✕</button>
+        </div>
+
+        <div id="app-modal-body" class="app-modal-body"></div>
+
+        <div id="app-modal-actions" class="app-modal-actions"></div>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
