@@ -59,6 +59,17 @@ const continentMapping = {
     "Africa": ["egypt","south africa","morocco","kenya","nigeria"]
 };
 const countryAliasMap = { "us":"United States of America","usa":"United States of America","uk":"United Kingdom","prc":"China","roc":"Taiwan","ua":"Ukraine" };
+const continentLabelMap = {
+    Asia: '亞洲',
+    Europe: '歐洲',
+    Americas: '美洲',
+    Oceania: '大洋洲',
+    Africa: '非洲',
+    Other: '其他'
+};
+function getContinentLabel(continent) {
+    return continentLabelMap[continent] || continent || '全部';
+}
 const flagCodeMap = {
     "japan":"jp","taiwan":"tw","united kingdom":"gb","united states of america":"us","united states":"us",
     "thailand":"th","malaysia":"my","china":"cn","south korea":"kr","france":"fr","germany":"de","italy":"it",
@@ -113,14 +124,16 @@ function buildTimelinePopup(loc) {
 
 function buildLogItemHTML(loc, days) {
     return `
-        <div class="log-item-info">
-            <div class="log-item-top">
-                <span class="badge-country">${getFlag(loc.country)} ${formatPlaceName(loc.country)}</span>
-                <span class="badge-region">${formatPlaceName(loc.region)}</span>
-                <span class="badge-rank">No.${loc.ranking}</span>
-                <span class="badge-days">${days}天</span>
+        <div class="log-item-main">
+            <div class="log-item-info">
+                <div class="log-item-place">${getFlag(loc.country)} ${formatPlaceName(loc.region)}</div>
+                <div class="log-item-meta">${formatPlaceName(loc.country)} · ${days} 天</div>
+                <div class="log-date">${UI_TEXT.popup.date} ${loc.dateRange || UI_TEXT.log.noRecord}</div>
             </div>
-            <div class="log-date">${UI_TEXT.popup.date} ${loc.dateRange || UI_TEXT.log.noRecord}</div>
+            <div class="log-item-side">
+                <span class="log-rank-pill">#${loc.ranking}</span>
+                <span class="log-chevron">›</span>
+            </div>
         </div>
         <div class="action-group">
             <button class="action-btn edit-btn" data-action="edit" data-id="${loc.id}">${UI_TEXT.log.edit}</button>
@@ -180,14 +193,240 @@ const UI_TEXT = {
         reason: '📝 戰略理由：'
     }
 };
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '未紀錄';
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function buildDateRangeLabel(loc) {
+    if (loc?.dateStart && loc?.dateEnd) {
+        return `${formatDisplayDate(loc.dateStart)} – ${formatDisplayDate(loc.dateEnd)}`;
+    }
+    if (loc?.dateRange) return loc.dateRange;
+    if (loc?.dateStart) return formatDisplayDate(loc.dateStart);
+    return '未紀錄';
+}
+
 function buildSummaryCardHTML(countryName, stat, cityCnt) {
     const avgRank = (stat.totalRank / stat.visits).toFixed(1);
 
     return `
-        <div class="summary-card">
-            <div class="summary-card-name">${getFlag(countryName)} ${formatPlaceName(countryName)}</div>
-            <div class="summary-card-meta">${UI_TEXT.summary.stay} ${stat.totalDays} 天 &nbsp;·&nbsp; ${UI_TEXT.summary.avgRank} ${avgRank} &nbsp;·&nbsp; ${cityCnt} ${UI_TEXT.summary.cityCountSuffix}</div>
+        <article class="summary-card" data-open-country-detail="${countryName}" tabindex="0" role="button" aria-label="查看 ${formatPlaceName(countryName)} 詳情">
+            <div class="summary-card-top">
+                <div class="summary-card-name">${getFlag(countryName)} ${formatPlaceName(countryName)}</div>
+                <div class="summary-card-pill">${stat.totalDays} 天</div>
+            </div>
+            <div class="summary-card-meta">${cityCnt} ${UI_TEXT.summary.cityCountSuffix} · ${UI_TEXT.summary.avgRank} ${avgRank}</div>
+        </article>
+    `;
+}
+
+function buildCountrySummaryHeroHTML(countryName, stat, cityCount, totalDaysAll) {
+    const avgRank = (stat.totalRank / stat.visits).toFixed(1);
+    const share = totalDaysAll > 0 ? ((stat.totalDays / totalDaysAll) * 100).toFixed(0) : '0';
+
+    return `
+        <article class="country-hero-card" data-open-country-detail="${countryName}" tabindex="0" role="button" aria-label="查看 ${formatPlaceName(countryName)} 國家摘要">
+            <div class="country-hero-copy">
+                <div class="country-hero-kicker">Primary Destination</div>
+                <div class="country-hero-name">${getFlag(countryName)} ${formatPlaceName(countryName)}</div>
+                <div class="country-hero-meta">${cityCount} ${UI_TEXT.summary.cityCountSuffix} · 平均排名 ${avgRank}</div>
+            </div>
+            <div class="country-hero-stats">
+                <div class="country-hero-stat">
+                    <span>停留</span>
+                    <strong>${stat.totalDays} 天</strong>
+                </div>
+                <div class="country-hero-stat">
+                    <span>占比</span>
+                    <strong>${share}%</strong>
+                </div>
+                <div class="country-hero-stat">
+                    <span>造訪</span>
+                    <strong>${stat.visits} 次</strong>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+
+function getCountryLocations(countryName) {
+    return locations.filter(loc => formatPlaceName(loc.country || '') === formatPlaceName(countryName || ''));
+}
+
+function focusMapOnLocation(loc) {
+    if (!loc || !loc.lat || !loc.lng) return;
+    switchMode('region');
+    mapMain.addLayer(regionLayerGroup);
+    mapMain.flyTo([loc.lat, loc.lng], 6, { duration: 1.1 });
+}
+
+function focusMapOnCountry(countryName) {
+    const matching = getCountryLocations(countryName).filter(loc => loc.lat && loc.lng);
+    if (!matching.length) return;
+
+    switchMode('region');
+    mapMain.addLayer(regionLayerGroup);
+
+    if (matching.length === 1) {
+        mapMain.flyTo([matching[0].lat, matching[0].lng], 5, { duration: 1.1 });
+        return;
+    }
+
+    const bounds = L.latLngBounds(matching.map(loc => [loc.lat, loc.lng]));
+    mapMain.fitBounds(bounds.pad(0.32), { animate: true, duration: 1.1 });
+}
+
+function buildLogDetailHTML(loc) {
+    const days = calculateDays(loc.dateStart, loc.dateEnd);
+    const continent = getContinentLabel(getContinent(loc.country));
+    const hasBoundary = Boolean(loc.geojson && (loc.geojson.type === 'Polygon' || loc.geojson.type === 'MultiPolygon'));
+
+    return `
+        <section class="detail-hero">
+            <div class="detail-hero-topline">
+                <div>
+                    <div class="detail-hero-kicker">Travel Record</div>
+                    <div class="detail-hero-title">${getFlag(loc.country)} ${formatPlaceName(loc.region)}</div>
+                    <div class="detail-hero-subtitle">${formatPlaceName(loc.country)} · ${buildDateRangeLabel(loc)}</div>
+                </div>
+                <div class="detail-rank-badge">Vibe #${loc.ranking || '—'}</div>
+            </div>
+            <div class="detail-chip-row">
+                <span class="detail-chip">停留 ${days} 天</span>
+                <span class="detail-chip">${continent}</span>
+                <span class="detail-chip">${hasBoundary ? '有邊界資料' : '點位模式'}</span>
+            </div>
+            <div class="detail-actions">
+                <button type="button" class="drawer-action-btn drawer-action-btn--primary" data-detail-action="focus-log" data-id="${loc.id}">在地圖查看</button>
+                <button type="button" class="drawer-action-btn" data-detail-action="edit-log" data-id="${loc.id}">編輯這筆</button>
+                <button type="button" class="drawer-action-btn drawer-action-btn--danger" data-detail-action="delete-log" data-id="${loc.id}">刪除</button>
+            </div>
+        </section>
+
+        <section class="detail-section">
+            <div class="detail-section-head">
+                <div class="detail-section-title">旅程資訊</div>
+                <div class="detail-section-note">Maps 式快速摘要</div>
+            </div>
+            <div class="detail-meta-list">
+                <div class="detail-meta-row"><span class="detail-meta-label">日期</span><span class="detail-meta-value">${buildDateRangeLabel(loc)}</span></div>
+                <div class="detail-meta-row"><span class="detail-meta-label">國家 / 城市</span><span class="detail-meta-value">${formatPlaceName(loc.country)} · ${formatPlaceName(loc.region)}</span></div>
+                <div class="detail-meta-row"><span class="detail-meta-label">座標</span><span class="detail-meta-value">${loc.lat ? Number(loc.lat).toFixed(4) : '—'}, ${loc.lng ? Number(loc.lng).toFixed(4) : '—'}</span></div>
+                <div class="detail-meta-row"><span class="detail-meta-label">資料型態</span><span class="detail-meta-value">${hasBoundary ? 'Region polygon / MultiPolygon' : 'Marker point only'}</span></div>
+            </div>
+        </section>
+    `;
+}
+
+function buildCountryDetailHTML(countryName) {
+    const countryLocs = getCountryLocations(countryName);
+    const sortedByDate = [...countryLocs].sort((a, b) => {
+        const ta = a.dateStart ? new Date(a.dateStart).getTime() : a.id;
+        const tb = b.dateStart ? new Date(b.dateStart).getTime() : b.id;
+        return tb - ta;
+    });
+
+    if (!countryLocs.length) {
+        return '<div class="drawer-empty-state">找不到這個國家的旅程資料。</div>';
+    }
+
+    const totalDays = countryLocs.reduce((sum, loc) => sum + calculateDays(loc.dateStart, loc.dateEnd), 0);
+    const avgRank = (countryLocs.reduce((sum, loc) => sum + (parseInt(loc.ranking) || 0), 0) / countryLocs.length).toFixed(1);
+    const uniqueCities = new Map();
+    const yearSet = new Set();
+
+    countryLocs.forEach(loc => {
+        const key = formatPlaceName(loc.region || '未知地點');
+        const days = calculateDays(loc.dateStart, loc.dateEnd);
+        const prev = uniqueCities.get(key) || { visits: 0, days: 0, bestRank: Infinity };
+        uniqueCities.set(key, {
+            visits: prev.visits + 1,
+            days: prev.days + days,
+            bestRank: Math.min(prev.bestRank, parseInt(loc.ranking) || Infinity)
+        });
+        const year = extractYear(loc);
+        if (year) yearSet.add(year);
+    });
+
+    const cityEntries = [...uniqueCities.entries()]
+        .sort((a, b) => b[1].days - a[1].days || a[1].bestRank - b[1].bestRank)
+        .slice(0, 6);
+
+    const years = [...yearSet].sort();
+    const yearsLabel = years.length ? `${years[0]}${years.length > 1 ? ` – ${years[years.length - 1]}` : ''}` : '未紀錄';
+
+    const tripRows = sortedByDate.map(loc => {
+        const days = calculateDays(loc.dateStart, loc.dateEnd);
+        return `
+            <button type="button" class="drawer-trip-row" data-detail-action="open-log" data-id="${loc.id}">
+                <div class="drawer-trip-main">
+                    <div class="drawer-trip-place">${formatPlaceName(loc.region)}</div>
+                    <div class="drawer-trip-date">${buildDateRangeLabel(loc)}</div>
+                    <div class="drawer-trip-meta">停留 ${days} 天 · 排名 #${loc.ranking || '—'}</div>
+                </div>
+                <div class="drawer-trip-pills">
+                    <span class="detail-micro-pill">${days} 天</span>
+                    <span class="detail-micro-pill">#${loc.ranking || '—'}</span>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    const cityRows = cityEntries.map(([cityName, stat]) => `
+        <div class="city-breakdown-item">
+            <div class="city-breakdown-top">
+                <div>
+                    <div class="city-breakdown-name">${cityName}</div>
+                    <div class="city-breakdown-meta">${stat.visits} 次造訪 · 最佳排名 #${Number.isFinite(stat.bestRank) ? stat.bestRank : '—'}</div>
+                </div>
+                <div class="city-pill-row">
+                    <span class="detail-micro-pill">${stat.days} 天</span>
+                </div>
+            </div>
         </div>
+    `).join('');
+
+    return `
+        <section class="detail-hero detail-hero--country">
+            <div class="detail-hero-topline">
+                <div>
+                    <div class="detail-hero-kicker">Country Detail</div>
+                    <div class="detail-hero-title">${getFlag(countryName)} ${formatPlaceName(countryName)}</div>
+                    <div class="detail-hero-subtitle">${countryLocs.length} 筆旅程 · ${uniqueCities.size} 座城市 · 活動年份 ${yearsLabel}</div>
+                </div>
+                <div class="detail-rank-badge">平均 #${avgRank}</div>
+            </div>
+            <div class="detail-stat-grid">
+                <div class="detail-stat-card"><span class="detail-stat-label">停留總天數</span><span class="detail-stat-value">${totalDays}</span></div>
+                <div class="detail-stat-card"><span class="detail-stat-label">造訪次數</span><span class="detail-stat-value">${countryLocs.length}</span></div>
+                <div class="detail-stat-card"><span class="detail-stat-label">城市數</span><span class="detail-stat-value">${uniqueCities.size}</span></div>
+                <div class="detail-stat-card"><span class="detail-stat-label">平均排名</span><span class="detail-stat-value">#${avgRank}</span></div>
+            </div>
+            <div class="detail-actions">
+                <button type="button" class="drawer-action-btn drawer-action-btn--primary" data-detail-action="focus-country" data-country="${countryName}">在地圖查看</button>
+                <button type="button" class="drawer-action-btn" data-detail-action="filter-country" data-country="${countryName}">篩選這個國家</button>
+            </div>
+        </section>
+
+        <section class="detail-section">
+            <div class="detail-section-head">
+                <div class="detail-section-title">城市分布</div>
+                <div class="detail-section-note">Health 式關鍵 breakdown</div>
+            </div>
+            <div class="city-breakdown-list">${cityRows || '<div class="drawer-empty-state">沒有城市資料。</div>'}</div>
+        </section>
+
+        <section class="detail-section">
+            <div class="detail-section-head">
+                <div class="detail-section-title">旅程列表</div>
+                <div class="detail-section-note">點擊可切到單筆旅程 drawer</div>
+            </div>
+            <div class="detail-trip-list">${tripRows}</div>
+        </section>
     `;
 }
 
@@ -389,18 +628,42 @@ function destroyChart(name) {
 function getLegendOptions(position = 'top') {
     return {
         position,
+        align: position === 'right' ? 'center' : 'start',
         labels: {
-            color: '#6b8aad',
-            font: { family: 'Sora', size: 11 }
+            color: '#98a4b8',
+            usePointStyle: true,
+            pointStyle: 'circle',
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 16,
+            font: { family: 'Inter', size: 11, weight: '600' }
         }
     };
 }
 
 function getMonoTicks({ size = 10, stepSize } = {}) {
     return {
-        color: '#6b8aad',
+        color: '#7f8a9f',
+        padding: 6,
+        maxTicksLimit: 6,
         ...(stepSize !== undefined ? { stepSize } : {}),
         font: { family: 'JetBrains Mono', size }
+    };
+}
+
+function getTooltipOptions() {
+    return {
+        backgroundColor: 'rgba(28, 31, 39, 0.96)',
+        titleColor: '#f5f7fb',
+        bodyColor: '#d9e0ec',
+        borderColor: 'rgba(255,255,255,0.08)',
+        borderWidth: 1,
+        titleFont: { family: 'Inter', size: 12, weight: '700' },
+        bodyFont: { family: 'Inter', size: 12, weight: '500' },
+        cornerRadius: 14,
+        displayColors: true,
+        boxPadding: 4,
+        padding: 12
     };
 }
 
@@ -414,29 +677,42 @@ function getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
                     type: 'bar',
                     label: '出征次數',
                     data: dataCounts,
-                    backgroundColor: 'rgba(56,189,248,0.7)',
-                    borderRadius: 4,
+                    backgroundColor: 'rgba(86, 184, 255, 0.78)',
+                    hoverBackgroundColor: 'rgba(106, 198, 255, 0.92)',
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    maxBarThickness: 28,
                     yAxisID: 'y'
                 },
                 {
                     type: 'line',
                     label: '停留天數',
                     data: dataDays,
-                    borderColor: '#f5c842',
-                    backgroundColor: '#f5c842',
-                    borderWidth: 2,
-                    pointRadius: 4,
+                    borderColor: '#ffd37a',
+                    backgroundColor: '#ffd37a',
+                    borderWidth: 2.5,
+                    tension: 0.34,
+                    pointRadius: 3.5,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: '#ffd37a',
+                    pointBorderWidth: 0,
+                    fill: false,
                     yAxisID: 'y1'
                 },
                 {
                     type: 'line',
                     label: '累積國家數',
                     data: cumulativeCountries,
-                    borderColor: '#a78bfa',
-                    backgroundColor: '#a78bfa',
+                    borderColor: '#8fe3c0',
+                    backgroundColor: '#8fe3c0',
                     borderWidth: 2,
-                    borderDash: [5, 5],
-                    pointRadius: 4,
+                    tension: 0.28,
+                    borderDash: [6, 6],
+                    pointRadius: 2.5,
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: '#8fe3c0',
+                    pointBorderWidth: 0,
+                    fill: false,
                     yAxisID: 'y'
                 }
             ]
@@ -444,8 +720,10 @@ function getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: getLegendOptions()
+                legend: getLegendOptions(),
+                tooltip: getTooltipOptions()
             },
             scales: {
                 y: {
@@ -453,18 +731,20 @@ function getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
                     position: 'left',
                     beginAtZero: true,
                     ticks: getMonoTicks({ size: 10, stepSize: 1 }),
-                    grid: { color: 'rgba(56,189,248,0.06)' }
+                    grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false }
                 },
                 y1: {
                     type: 'linear',
                     position: 'right',
                     beginAtZero: true,
                     ticks: getMonoTicks({ size: 10 }),
-                    grid: { display: false }
+                    grid: { display: false },
+                    border: { display: false }
                 },
                 x: {
                     ticks: getMonoTicks({ size: 10 }),
-                    grid: { display: false }
+                    grid: { display: false },
+                    border: { display: false }
                 }
             }
         }
@@ -472,15 +752,6 @@ function getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
 }
 
 function getContinentChartConfig(continentCounts) {
-    const continentLabelMap = {
-        Asia: '亞洲',
-        Europe: '歐洲',
-        Americas: '美洲',
-        Oceania: '大洋洲',
-        Africa: '非洲',
-        Other: '其他'
-    };
-
     const labels = Object.keys(continentCounts).map(c => continentLabelMap[c] || c);
 
     return {
@@ -489,16 +760,18 @@ function getContinentChartConfig(continentCounts) {
             labels,
             datasets: [{
                 data: Object.values(continentCounts),
-                backgroundColor: ['#38bdf8', '#34d399', '#f5c842', '#f87171', '#a78bfa', '#64748b'],
-                borderWidth: 0
+                backgroundColor: ['#77c8ff', '#8fe3c0', '#ffd37a', '#ff8f8f', '#bca7ff', '#8e96a3'],
+                borderWidth: 0,
+                hoverOffset: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '65%',
+            cutout: '68%',
             plugins: {
-                legend: getLegendOptions('right')
+                legend: getLegendOptions('right'),
+                tooltip: getTooltipOptions()
             }
         }
     };
@@ -551,10 +824,23 @@ function syncSubmitButtonUI() {
 // 4. 地圖初始化
 // ==========================================
 const mapMain = L.map('map-main', { zoomControl: true }).setView([25, 0], 2);
+mapMain.zoomControl.setPosition('topright');
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution:'&copy; OSM', minZoom:2, maxZoom:18 }).addTo(mapMain);
 const countryLayerGroup = L.layerGroup().addTo(mapMain);
 const regionLayerGroup = L.layerGroup();
 let heatLayerGroup = null;
+
+
+function updateMapModeLabel(mode = currentMode) {
+    const modeLabel = document.getElementById('map-mode-label');
+    if (!modeLabel) return;
+    const mapModeText = {
+        country: '國家檢視',
+        region: '據點檢視',
+        heat: '熱區檢視'
+    };
+    modeLabel.textContent = mapModeText[mode] || '地圖檢視';
+}
 
 function switchMode(mode) {
     currentMode = mode;
@@ -563,6 +849,7 @@ function switchMode(mode) {
         document.getElementById(`btn-mode-${m}`)?.classList.remove('active');
     });
     document.getElementById(`btn-mode-${mode}`)?.classList.add('active');
+    updateMapModeLabel(mode);
 
     mapMain.removeLayer(countryLayerGroup);
     mapMain.removeLayer(regionLayerGroup);
@@ -715,10 +1002,12 @@ function renderChart(filteredLocs = locations) {
 function renderUI(filteredLocations = getFilteredLocations()) {
     const list = document.getElementById('log-list');
     const summaryList = document.getElementById('country-summary-list');
-    if (!list || !summaryList) return;
+    const summaryHero = document.getElementById('country-summary-hero');
+    if (!list || !summaryList || !summaryHero) return;
 
     list.innerHTML = '';
     summaryList.innerHTML = '';
+    summaryHero.innerHTML = '';
 
     const sortBy = document.getElementById('sort-by')?.value || 'date';
 
@@ -762,9 +1051,25 @@ function renderUI(filteredLocations = getFilteredLocations()) {
         uniqueCities.add(`${cName}_${(loc.region || '').toLowerCase()}`);
     });
 
-    Object.keys(countriesData)
-    .sort((a, b) => countriesData[b].totalDays - countriesData[a].totalDays)
-    .forEach(c => {
+    const sortedCountryKeys = Object.keys(countriesData)
+    .sort((a, b) => countriesData[b].totalDays - countriesData[a].totalDays);
+
+    if (sortedCountryKeys.length) {
+        const topCountry = sortedCountryKeys[0];
+        const topStat = countriesData[topCountry];
+        const topCityCnt = Array.from(uniqueCities).filter(city => city.startsWith(`${topCountry}_`)).length;
+        summaryHero.innerHTML = buildCountrySummaryHeroHTML(topCountry, topStat, topCityCnt, totalDaysAll);
+    } else {
+        summaryHero.innerHTML = `
+            <article class="country-hero-card country-hero-card--empty">
+                <div class="country-hero-kicker">Primary Destination</div>
+                <div class="country-hero-name">尚未建立旅遊摘要</div>
+                <div class="country-hero-meta">新增幾筆旅程後，這裡會自動顯示你的主戰區。</div>
+            </article>
+        `;
+    }
+
+    sortedCountryKeys.slice(0, 4).forEach(c => {
         const stat = countriesData[c];
         const cityCnt = Array.from(uniqueCities).filter(city => city.startsWith(`${c}_`)).length;
 
@@ -803,14 +1108,69 @@ function renderUI(filteredLocations = getFilteredLocations()) {
         return tb - ta;
     });
 
-    sorted.forEach(loc => {
-        const days = calculateDays(loc.dateStart, loc.dateEnd);
-        const li = document.createElement('li');
-        li.className = `log-item ${editingId === loc.id ? 'editing' : ''}`;
+    if (!sorted.length) {
+        list.innerHTML = `
+            <div class="log-empty-state">
+                <div class="log-empty-icon">🧭</div>
+                <div class="log-empty-title">沒有符合的旅遊紀錄</div>
+                <div class="log-empty-copy">試著清掉篩選，或直接新增一筆新的旅程。</div>
+            </div>
+        `;
+    } else {
+        let groupedLogs = {};
+        let orderedGroupKeys = [];
 
-       li.innerHTML = buildLogItemHTML(loc, days);
-        list.appendChild(li);
-    });
+        if (sortBy === 'rank') {
+            const rankBuckets = [
+                { key: 'Top 3', label: 'Top 3', test: rank => rank <= 3 },
+                { key: '4-6', label: '4–6 名', test: rank => rank >= 4 && rank <= 6 },
+                { key: '7+', label: '7 名之後', test: rank => rank >= 7 }
+            ];
+
+            rankBuckets.forEach(bucket => {
+                groupedLogs[bucket.label] = sorted.filter(loc => bucket.test(parseInt(loc.ranking || 999)));
+            });
+            orderedGroupKeys = rankBuckets.map(bucket => bucket.label).filter(label => groupedLogs[label].length);
+        } else {
+            groupedLogs = sorted.reduce((acc, loc) => {
+                const year = extractYear(loc) || '未分類';
+                if (!acc[year]) acc[year] = [];
+                acc[year].push(loc);
+                return acc;
+            }, {});
+
+            orderedGroupKeys = Object.keys(groupedLogs).sort((a, b) => {
+                if (a === '未分類') return 1;
+                if (b === '未分類') return -1;
+                return Number(b) - Number(a);
+            });
+        }
+
+        list.innerHTML = orderedGroupKeys.map(groupKey => {
+            const entries = groupedLogs[groupKey];
+            const totalDays = entries.reduce((sum, loc) => sum + calculateDays(loc.dateStart, loc.dateEnd), 0);
+            const rows = entries.map(loc => {
+                const days = calculateDays(loc.dateStart, loc.dateEnd);
+                return `
+                    <article class="log-item ${editingId === loc.id ? 'editing' : ''}" data-open-log-detail="${loc.id}" tabindex="0" role="button" aria-label="查看 ${formatPlaceName(loc.region)} 詳情">
+                        ${buildLogItemHTML(loc, days)}
+                    </article>
+                `;
+            }).join('');
+
+            return `
+                <section class="log-year-group">
+                    <div class="log-year-header">
+                        <div>
+                            <div class="log-year-title">${groupKey}</div>
+                            <div class="log-year-meta">${entries.length} 筆旅程 · ${totalDays} 天</div>
+                        </div>
+                    </div>
+                    <div class="log-year-card">${rows}</div>
+                </section>
+            `;
+        }).join('');
+    }
 
     document.getElementById('count-country').innerText = Object.keys(countriesData).length;
     document.getElementById('count-region').innerText = uniqueCities.size;
@@ -823,15 +1183,21 @@ function renderUI(filteredLocations = getFilteredLocations()) {
 
 document.getElementById('log-list')?.addEventListener('click', async function(e) {
     const btn = e.target.closest('[data-action]');
-    if (!btn) return;
+    if (btn) {
+        const id = Number(btn.dataset.id);
+        const action = btn.dataset.action;
 
-    const id = Number(btn.dataset.id);
-    const action = btn.dataset.action;
+        if (action === 'edit') {
+            editLocation(id);
+        } else if (action === 'delete') {
+            await deleteLocation(id);
+        }
+        return;
+    }
 
-    if (action === 'edit') {
-        editLocation(id);
-    } else if (action === 'delete') {
-        await deleteLocation(id);
+    const logCard = e.target.closest('[data-open-log-detail]');
+    if (logCard) {
+        openLogDetail(Number(logCard.dataset.openLogDetail));
     }
 });
 
@@ -960,6 +1326,7 @@ const newLog = {
 
     renderAll();
     mapMain.flyTo([geoData.lat, geoData.lng], currentMode === 'country' ? 4 : 6);
+    closeSheet('compose');
 }
 
 syncSubmitButtonUI();
@@ -972,7 +1339,8 @@ function editLocation(id) {
     document.getElementById('input-ranking').value=loc.ranking||'';
     editingId=id;
     syncSubmitButtonUI();
-    renderUI(); document.getElementById('tracker-form').scrollIntoView({ behavior:'smooth' });
+    renderUI();
+    openComposeSheet();
 }
 
 function cancelEdit() {
@@ -1253,3 +1621,461 @@ document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
 
 // 🚀 網頁載入後的第一個動作：從檢查權限開始！
 document.addEventListener('DOMContentLoaded', checkAuth);
+
+
+// ==========================================
+// iOS-style interaction layer
+// ==========================================
+const sheetBackdrop = document.getElementById('sheet-backdrop');
+const composeSheet = document.getElementById('compose-sheet');
+const filtersSheet = document.getElementById('filters-sheet');
+const detailDrawer = document.getElementById('detail-drawer');
+const composeSheetTitle = document.getElementById('compose-sheet-title');
+const detailDrawerKicker = document.getElementById('detail-drawer-kicker');
+const detailDrawerTitle = document.getElementById('detail-drawer-title');
+const detailDrawerSubtitle = document.getElementById('detail-drawer-subtitle');
+const detailDrawerContent = document.getElementById('detail-drawer-content');
+const bottomTabs = Array.from(document.querySelectorAll('.tabbar-btn[data-target]'));
+const scrollSections = ['section-map', 'section-log', 'section-insights', 'section-settings']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+
+const sheetRegistry = {
+    compose: composeSheet,
+    filters: filtersSheet,
+    detail: detailDrawer
+};
+
+const appShellState = {
+    openSheet: null,
+    activeSection: 'section-map',
+    detailContext: null
+};
+
+function applyAccessibilityPreferences() {
+    const mediaQueries = [
+        ['reduced-motion', '(prefers-reduced-motion: reduce)'],
+        ['reduced-transparency', '(prefers-reduced-transparency: reduce)'],
+        ['high-contrast', '(prefers-contrast: more)']
+    ];
+
+    mediaQueries.forEach(([className, query]) => {
+        try {
+            const mq = window.matchMedia(query);
+            const sync = () => document.body.classList.toggle(className, mq.matches);
+            sync();
+            if (mq.addEventListener) mq.addEventListener('change', sync);
+            else if (mq.addListener) mq.addListener(sync);
+        } catch (_) {
+            // Some media queries are not supported in all browsers.
+        }
+    });
+}
+
+function updateComposeHeader() {
+    if (!composeSheetTitle) return;
+    composeSheetTitle.innerHTML = editingId
+        ? '<span class="panel-title-icon">✏️</span> 編輯旅程'
+        : '<span class="panel-title-icon">✈️</span> 新增旅程';
+}
+
+function syncFilterShortcutState() {
+    const currentContinent = document.getElementById('filter-continent')?.value || 'all';
+    const currentSort = document.getElementById('sort-by')?.value || 'date';
+
+    document.querySelectorAll('[data-filter-continent]').forEach(btn => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-filter-continent') === currentContinent);
+    });
+    document.querySelectorAll('[data-filter-sort]').forEach(btn => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-filter-sort') === currentSort);
+    });
+}
+
+function resetFilters() {
+    const searchInput = document.getElementById('search-log');
+    const continentSelect = document.getElementById('filter-continent');
+    const yearSelect = document.getElementById('filter-year');
+    const sortSelect = document.getElementById('sort-by');
+
+    if (searchInput) searchInput.value = '';
+    if (continentSelect) continentSelect.value = 'all';
+    if (yearSelect) yearSelect.value = 'all';
+    if (sortSelect) sortSelect.value = 'date';
+
+    syncFilterShortcutState();
+    renderAll();
+}
+
+function openSheet(name) {
+    const targetSheet = sheetRegistry[name];
+    if (!targetSheet) return;
+
+    Object.entries(sheetRegistry).forEach(([key, sheet]) => {
+        const shouldOpen = key === name;
+        sheet.classList.toggle('is-open', shouldOpen);
+        sheet.setAttribute('aria-hidden', String(!shouldOpen));
+    });
+
+    appShellState.openSheet = name;
+    document.body.classList.add('has-sheet');
+    sheetBackdrop?.classList.add('is-visible');
+    sheetBackdrop?.setAttribute('aria-hidden', 'false');
+}
+
+function closeSheet(name = appShellState.openSheet) {
+    if (name && sheetRegistry[name]) {
+        sheetRegistry[name].classList.remove('is-open');
+        sheetRegistry[name].setAttribute('aria-hidden', 'true');
+        if (name === 'detail') appShellState.detailContext = null;
+    } else {
+        Object.values(sheetRegistry).forEach(sheet => {
+            sheet?.classList.remove('is-open');
+            sheet?.setAttribute('aria-hidden', 'true');
+        });
+        appShellState.detailContext = null;
+    }
+
+    appShellState.openSheet = null;
+    document.body.classList.remove('has-sheet');
+    sheetBackdrop?.classList.remove('is-visible');
+    sheetBackdrop?.setAttribute('aria-hidden', 'true');
+}
+
+function openComposeSheet() {
+    updateComposeHeader();
+    openSheet('compose');
+    setTimeout(() => regionInput?.focus(), 180);
+}
+
+function openFilterSheet() {
+    openSheet('filters');
+    setTimeout(() => document.getElementById('search-log')?.focus(), 180);
+}
+
+function openDetailDrawer({ kicker, title, subtitle, html, context }) {
+    if (detailDrawerKicker) detailDrawerKicker.textContent = kicker || 'Detail';
+    if (detailDrawerTitle) detailDrawerTitle.innerHTML = title || '<span class="panel-title-icon">🧭</span> 詳情';
+    if (detailDrawerSubtitle) detailDrawerSubtitle.textContent = subtitle || '';
+    if (detailDrawerContent) detailDrawerContent.innerHTML = html || '<div class="drawer-empty-state">沒有更多內容。</div>';
+    appShellState.detailContext = context || null;
+    openSheet('detail');
+}
+
+function refreshDetailDrawer() {
+    const context = appShellState.detailContext;
+    if (!context || appShellState.openSheet !== 'detail') return;
+
+    if (context.type === 'log') {
+        const loc = locations.find(item => item.id === context.id);
+        if (!loc) { closeSheet('detail'); return; }
+        openDetailDrawer({
+            kicker: 'Travel Record',
+            title: '<span class="panel-title-icon">🧭</span> 旅程詳情',
+            subtitle: '像 Apple Maps 一樣，先看單筆紀錄的核心資訊，再決定下一步。',
+            html: buildLogDetailHTML(loc),
+            context
+        });
+    }
+
+    if (context.type === 'country') {
+        const locs = getCountryLocations(context.country);
+        if (!locs.length) { closeSheet('detail'); return; }
+        openDetailDrawer({
+            kicker: 'Country Detail',
+            title: '<span class="panel-title-icon">🌐</span> 國家摘要',
+            subtitle: '把國家摘要做成第二層 drawer：先看總覽，再點單筆旅程。',
+            html: buildCountryDetailHTML(context.country),
+            context
+        });
+    }
+}
+
+function openLogDetail(id) {
+    const loc = locations.find(item => item.id === id);
+    if (!loc) return;
+    openDetailDrawer({
+        kicker: 'Travel Record',
+        title: '<span class="panel-title-icon">🧭</span> 旅程詳情',
+        subtitle: '像 Apple Maps 一樣，先看單筆紀錄的核心資訊，再決定下一步。',
+        html: buildLogDetailHTML(loc),
+        context: { type: 'log', id }
+    });
+}
+
+function openCountryDetail(countryName) {
+    if (!countryName) return;
+    openDetailDrawer({
+        kicker: 'Country Detail',
+        title: '<span class="panel-title-icon">🌐</span> 國家摘要',
+        subtitle: '把國家摘要做成第二層 drawer：先看總覽，再點單筆旅程。',
+        html: buildCountryDetailHTML(countryName),
+        context: { type: 'country', country: formatPlaceName(countryName) }
+    });
+}
+
+function handleSheetTriggers() {
+    document.querySelectorAll('[data-open-sheet]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-open-sheet');
+            if (target === 'compose') openComposeSheet();
+            if (target === 'filters') openFilterSheet();
+        });
+    });
+
+    document.querySelectorAll('[data-close-sheet]').forEach(btn => {
+        btn.addEventListener('click', () => closeSheet(btn.getAttribute('data-close-sheet')));
+    });
+
+    document.getElementById('country-summary-hero')?.addEventListener('click', (e) => {
+        const card = e.target.closest('[data-open-country-detail]');
+        if (card) openCountryDetail(card.getAttribute('data-open-country-detail'));
+    });
+
+    document.getElementById('country-summary-list')?.addEventListener('click', (e) => {
+        const card = e.target.closest('[data-open-country-detail]');
+        if (card) openCountryDetail(card.getAttribute('data-open-country-detail'));
+    });
+
+    document.getElementById('detail-drawer-content')?.addEventListener('click', async (e) => {
+        const actionEl = e.target.closest('[data-detail-action]');
+        if (!actionEl) return;
+
+        const action = actionEl.getAttribute('data-detail-action');
+        const id = Number(actionEl.getAttribute('data-id'));
+        const country = actionEl.getAttribute('data-country');
+
+        if (action === 'focus-log') {
+            const loc = locations.find(item => item.id === id);
+            if (loc) { focusMapOnLocation(loc); closeSheet('detail'); scrollToSection('section-map'); }
+            return;
+        }
+        if (action === 'edit-log') {
+            closeSheet('detail');
+            editLocation(id);
+            return;
+        }
+        if (action === 'delete-log') {
+            await deleteLocation(id);
+            return;
+        }
+        if (action === 'focus-country') {
+            focusMapOnCountry(country);
+            closeSheet('detail');
+            scrollToSection('section-map');
+            return;
+        }
+        if (action === 'filter-country') {
+            const searchInput = document.getElementById('search-log');
+            if (searchInput) searchInput.value = country || '';
+            renderAll();
+            closeSheet('detail');
+            scrollToSection('section-log');
+            return;
+        }
+        if (action === 'open-log') {
+            openLogDetail(id);
+        }
+    });
+
+    const bindEnterToDetail = (selector, opener) => {
+        document.querySelector(selector)?.addEventListener('keydown', (e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('[data-open-country-detail], [data-open-log-detail]')) {
+                e.preventDefault();
+                const target = e.target.closest('[data-open-country-detail], [data-open-log-detail]');
+                if (target?.dataset.openCountryDetail) opener('country', target.dataset.openCountryDetail);
+                if (target?.dataset.openLogDetail) opener('log', Number(target.dataset.openLogDetail));
+            }
+        });
+    };
+
+    bindEnterToDetail('#country-summary-hero', (type, payload) => type === 'country' && openCountryDetail(payload));
+    bindEnterToDetail('#country-summary-list', (type, payload) => type === 'country' && openCountryDetail(payload));
+    bindEnterToDetail('#log-list', (type, payload) => type === 'log' && openLogDetail(payload));
+
+    document.querySelectorAll('[data-filter-continent]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const select = document.getElementById('filter-continent');
+            if (select) select.value = btn.getAttribute('data-filter-continent') || 'all';
+            syncFilterShortcutState();
+            renderAll();
+        });
+    });
+
+    document.querySelectorAll('[data-filter-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const select = document.getElementById('sort-by');
+            if (select) select.value = btn.getAttribute('data-filter-sort') || 'date';
+            syncFilterShortcutState();
+            renderAll();
+        });
+    });
+
+    document.getElementById('reset-filters-btn')?.addEventListener('click', resetFilters);
+
+    sheetBackdrop?.addEventListener('click', () => closeSheet());
+    document.getElementById('cancel-edit-btn')?.addEventListener('click', () => closeSheet('compose'));
+}
+
+function scrollToSection(targetId) {
+    const section = document.getElementById(targetId);
+    if (!section) return;
+
+    const topOffset = window.innerWidth <= 720 ? 72 : 88;
+    const top = section.getBoundingClientRect().top + window.scrollY - topOffset;
+    window.scrollTo({ top, behavior: document.body.classList.contains('reduced-motion') ? 'auto' : 'smooth' });
+}
+
+function setActiveTab(targetId) {
+    bottomTabs.forEach(btn => btn.classList.toggle('is-active', btn.dataset.target === targetId));
+    appShellState.activeSection = targetId;
+}
+
+function initBottomTabs() {
+    bottomTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.dataset.target;
+            setActiveTab(targetId);
+            scrollToSection(targetId);
+        });
+    });
+
+    if (!('IntersectionObserver' in window) || scrollSections.length === 0) return;
+
+    const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+            .filter(entry => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visible?.target?.id) {
+            setActiveTab(visible.target.id);
+        }
+    }, {
+        rootMargin: '-18% 0px -45% 0px',
+        threshold: [0.2, 0.4, 0.6]
+    });
+
+    scrollSections.forEach(section => observer.observe(section));
+}
+
+function updateHeroMetrics(filteredLocations = getFilteredLocations()) {
+    const totalDays = filteredLocations.reduce((sum, loc) => sum + calculateDays(loc.dateStart, loc.dateEnd), 0);
+    const countryCount = new Set(filteredLocations.map(loc => (loc.country || '').toLowerCase()).filter(Boolean)).size;
+    const regionCount = new Set(filteredLocations.map(loc => `${(loc.country || '').toLowerCase()}__${(loc.region || '').toLowerCase()}`)).size;
+
+    const countryEl = document.getElementById('hero-stat-countries');
+    const regionEl = document.getElementById('hero-stat-regions');
+    const daysEl = document.getElementById('hero-stat-days');
+
+    if (countryEl) countryEl.textContent = String(countryCount);
+    if (regionEl) regionEl.textContent = String(regionCount);
+    if (daysEl) daysEl.textContent = String(totalDays);
+}
+
+function updateActiveFilterSummary(filteredLocations = getFilteredLocations()) {
+    const chipsRoot = document.getElementById('active-filter-chips');
+    if (!chipsRoot) return;
+
+    const searchKeyword = (document.getElementById('search-log')?.value || '').trim();
+    const filterYear = document.getElementById('filter-year')?.value || 'all';
+    const filterContinent = document.getElementById('filter-continent')?.value || 'all';
+    const sortBy = document.getElementById('sort-by')?.value || 'date';
+
+    const chips = [
+        `<span class="filter-chip"><span>顯示</span><strong>${filteredLocations.length}</strong><span>筆</span></span>`,
+        `<span class="filter-chip"><span>排序</span><strong>${sortBy === 'rank' ? 'Vibe 排名' : '出征日期'}</strong></span>`
+    ];
+
+    if (searchKeyword) {
+        chips.push(`<span class="filter-chip"><span>搜尋</span><strong>${searchKeyword}</strong></span>`);
+    }
+    if (filterContinent !== 'all') {
+        chips.push(`<span class="filter-chip"><span>洲別</span><strong>${getContinentLabel(filterContinent)}</strong></span>`);
+    }
+    if (filterYear !== 'all') {
+        chips.push(`<span class="filter-chip"><span>年份</span><strong>${filterYear}</strong></span>`);
+    }
+
+    chipsRoot.innerHTML = chips.join('');
+    syncFilterShortcutState();
+}
+
+function updateChartInsights(filteredLocs = locations) {
+    const annualEl = document.getElementById('annual-chart-insight');
+    const continentEl = document.getElementById('continent-chart-insight');
+    const annualBadge = document.getElementById('annual-chart-badge');
+    const continentBadge = document.getElementById('continent-chart-badge');
+
+    if (!annualEl || !continentEl) return;
+    if (!filteredLocs.length) {
+        annualEl.textContent = '等待資料中。';
+        continentEl.textContent = '等待資料中。';
+        if (annualBadge) annualBadge.textContent = 'Trend';
+        if (continentBadge) continentBadge.textContent = 'Mix';
+        return;
+    }
+
+    const yearCountMap = {};
+    const continentCountMap = {};
+    let bestYear = null;
+
+    filteredLocs.forEach(loc => {
+        const year = extractYear(loc);
+        if (year) yearCountMap[year] = (yearCountMap[year] || 0) + 1;
+        const continent = getContinent(loc.country);
+        continentCountMap[continent] = (continentCountMap[continent] || 0) + 1;
+    });
+
+    const yearEntries = Object.entries(yearCountMap).sort((a, b) => b[1] - a[1] || String(b[0]).localeCompare(String(a[0])));
+    const continentEntries = Object.entries(continentCountMap).sort((a, b) => b[1] - a[1]);
+
+    if (yearEntries.length) {
+        bestYear = yearEntries[0];
+        annualEl.textContent = `${bestYear[0]} 是目前最密集的一年，共 ${bestYear[1]} 筆旅程。`;
+        if (annualBadge) annualBadge.textContent = `Peak ${bestYear[0]}`;
+    } else {
+        annualEl.textContent = '目前沒有足夠日期資料可形成年度趨勢。';
+        if (annualBadge) annualBadge.textContent = 'Trend';
+    }
+
+    if (continentEntries.length) {
+        const [continent, count] = continentEntries[0];
+        const share = ((count / filteredLocs.length) * 100).toFixed(0);
+        continentEl.textContent = `${continentLabelMap[continent] || continent} 目前占 ${share}% ，是你的主戰區。`;
+        if (continentBadge) continentBadge.textContent = `${share}% ${continentLabelMap[continent] || continent}`;
+    } else {
+        continentEl.textContent = '目前沒有足夠地區資料可形成洲別結構。';
+        if (continentBadge) continentBadge.textContent = 'Mix';
+    }
+}
+
+const originalRenderUI = renderUI;
+renderUI = function(filteredLocations = getFilteredLocations()) {
+    originalRenderUI(filteredLocations);
+    updateActiveFilterSummary(filteredLocations);
+    updateHeroMetrics(filteredLocations);
+    updateChartInsights(filteredLocations);
+    updateComposeHeader();
+    updateMapModeLabel(currentMode);
+    refreshDetailDrawer();
+};
+
+const originalSyncSubmitButtonUI = syncSubmitButtonUI;
+syncSubmitButtonUI = function() {
+    originalSyncSubmitButtonUI();
+    updateComposeHeader();
+};
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && appShellState.openSheet) {
+        closeSheet();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    applyAccessibilityPreferences();
+    handleSheetTriggers();
+    initBottomTabs();
+    updateComposeHeader();
+    syncFilterShortcutState();
+    updateActiveFilterSummary([]);
+});

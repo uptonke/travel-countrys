@@ -3,83 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#151821">
     <title>旅遊紀錄</title>
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
+
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="login-overlay" style="display: none;">
         <div class="login-card">
             <div style="text-align: center; margin-bottom: 2rem;">
-                <div style="font-size: 3.5rem; margin-bottom: 0.5rem; text-shadow: 0 0 20px var(--cyan-glow);">🌍</div>
-                <h2 style="font-family: 'Rajdhani', sans-serif; font-size: 1.8rem; color: var(--cyan); letter-spacing: 2px;">STRATEGIC COMMAND</h2>
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sub); letter-spacing: 3px; margin-top: 5px;">SECURE ACCESS ONLY</div>
+                <div style="font-size: 3.25rem; margin-bottom: 0.6rem;">🌍</div>
+                <h2 style="font-size: 1.55rem; color: var(--text-main); letter-spacing: -0.02em; font-weight: 700;">Travel Log Sign In</h2>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sub); letter-spacing: 1.8px; margin-top: 6px;">SYNC · MAP · INSIGHT</div>
             </div>
             <form id="loginForm">
                 <div class="input-group">
-                    <div class="field-label">EMAIL 認證信箱</div>
+                    <div class="field-label">Email</div>
                     <input type="email" id="login-email" required placeholder="Enter your email">
                 </div>
                 <div class="input-group" style="margin-bottom: 1.5rem;">
-                    <div class="field-label">PASSWORD 終極密碼</div>
+                    <div class="field-label">Password</div>
                     <input type="password" id="login-password" required placeholder="Enter your password">
                 </div>
                 <div id="login-error" style="color: var(--red); font-size: 12px; margin-bottom: 1rem; text-align: center; display: none;"></div>
-                <button type="submit" id="login-btn" class="btn-submit">LOGIN 系統登入</button>
+                <button type="submit" id="login-btn" class="btn-submit">登入</button>
             </form>
         </div>
     </div>
 
     <div class="page-wrapper">
         <div class="container">
-            <header>
-                <p class="header-eyebrow">Strategic Travel Command</p>
-                <h1>🌍 旅遊紀錄</h1>
-                <p class="header-sub">先看地圖，再輸入旅遊與分析</p>
-            </header>
+            <header class="app-header" id="section-map">
+                <div class="topbar glass-bar">
+                    <div class="topbar-leading">
+                        <div class="app-icon">🌍</div>
+                        <div>
+                            <p class="header-eyebrow">Travel Log</p>
+                            <h1>旅遊紀錄</h1>
+                        </div>
+                    </div>
 
-            <div class="map-container">
-                <div class="map-statusbar">
-                    <span class="map-status-dot"></span>
-                    <span>LIVE MAP</span>
-                    <span style="color:var(--border-bright)">|</span>
-                    <span>OpenStreetMap · CartoDB Dark</span>
-
-                    <div class="mode-pills" style="margin-left:auto;">
-                        <button id="btn-mode-country" class="mode-pill active">🗺️ 國家</button>
-                        <button id="btn-mode-region" class="mode-pill">💠 據點</button>
-                        <button id="btn-mode-heat" class="mode-pill">🔥 熱區</button>
+                    <div class="topbar-actions">
+                        <button type="button" class="topbar-btn topbar-btn--ghost" data-open-sheet="filters">篩選</button>
+                        <button type="button" class="topbar-btn topbar-btn--primary" data-open-sheet="compose">＋ 新增</button>
                     </div>
                 </div>
-                <div id="map-main" class="map-box"></div>
-            </div>
 
-            <div class="toolbar">
-                <div class="toolbar-row">
-                    <button id="btn-timeline" class="btn-timeline">▶ 軌跡推演</button>
-<button id="btn-ai" class="btn-ai">✦ AI 戰略預測</button>
-<button id="btn-export-json" class="btn-data">💾 備份 JSON</button>
-<button id="btn-export-csv" class="btn-data">📊 匯出 CSV</button>
-<button id="btn-import-open" class="btn-data">📂 匯入舊版 JSON</button>
-<button id="btn-logout" class="btn-data" style="color: var(--red); border-color: rgba(248,113,113,0.3);">🚪 登出</button>
-<input type="file" id="import-file" style="display:none;" accept=".json">
+                <div class="hero-strip">
+                    <div class="hero-copy">
+                        <p class="hero-kicker">Content-first dark UI</p>
+                        <p class="hero-sub">先看地圖，再輸入旅遊、管理紀錄、往下看統計與圖表。</p>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="hero-badge"><span>國家</span><strong id="hero-stat-countries">0</strong></div>
+                        <div class="hero-badge"><span>據點</span><strong id="hero-stat-regions">0</strong></div>
+                        <div class="hero-badge"><span>累計天數</span><strong id="hero-stat-days">0</strong></div>
+                    </div>
                 </div>
-            </div>
+            </header>
+
+            <section class="map-shell">
+                <div class="map-container">
+                    <div class="map-statusbar">
+                        <span class="map-status-dot"></span>
+                        <span>Live Map</span>
+                        <span class="map-divider">·</span>
+                        <span>OpenStreetMap · CartoDB Dark</span>
+                        <span id="map-mode-label" class="map-mode-label">國家檢視</span>
+
+                        <div class="mode-pills" style="margin-left:auto;">
+                            <button id="btn-mode-country" class="mode-pill active">國家</button>
+                            <button id="btn-mode-region" class="mode-pill">據點</button>
+                            <button id="btn-mode-heat" class="mode-pill">熱區</button>
+                        </div>
+                    </div>
+                    <div id="map-main" class="map-box"></div>
+                </div>
+            </section>
+
+            <section class="toolbar toolbar--native" id="section-settings">
+                <div class="section-headline section-headline--compact">
+                    <div>
+                        <p class="section-eyebrow">Utility tray</p>
+                        <h2 class="section-title">工具與資料</h2>
+                    </div>
+                    <p class="section-copy">改成像原生 app 的工具抽屜：常用操作在前，資料維護與帳號動作放後排。</p>
+                </div>
+
+                <div class="utility-grid">
+                    <article class="utility-card utility-card--feature">
+                        <div class="utility-card-head">
+                            <div>
+                                <p class="utility-kicker">Quick actions</p>
+                                <h3>場景操作</h3>
+                            </div>
+                            <span class="utility-badge">Maps</span>
+                        </div>
+                        <div class="utility-pill-row utility-pill-row--feature">
+                            <button id="btn-timeline" class="btn-timeline">▶ 軌跡推演</button>
+                            <button id="btn-ai" class="btn-ai">✦ AI 戰略預測</button>
+                        </div>
+                        <p class="utility-footnote">先看時間軸，再交給 AI 做偏好解讀，保留高頻操作的前排位置。</p>
+                    </article>
+
+                    <article class="utility-card">
+                        <div class="utility-card-head">
+                            <div>
+                                <p class="utility-kicker">Data & account</p>
+                                <h3>資料維護</h3>
+                            </div>
+                            <span class="utility-badge utility-badge--muted">Health</span>
+                        </div>
+                        <div class="utility-pill-row utility-pill-row--wrap">
+                            <button id="btn-export-json" class="btn-data">備份 JSON</button>
+                            <button id="btn-export-csv" class="btn-data">匯出 CSV</button>
+                            <button id="btn-import-open" class="btn-data">匯入 JSON</button>
+                            <button id="btn-logout" class="btn-data btn-data--danger">登出</button>
+                            <input type="file" id="import-file" style="display:none;" accept=".json">
+                        </div>
+                        <p class="utility-footnote">把 web dashboard 那種整排工具列壓成兩張原生分組卡，資訊層級會安靜很多。</p>
+                    </article>
+                </div>
+            </section>
 
             <div class="bottom-grid">
-                <div class="control-panel">
-                    <div class="panel-title"><span class="panel-title-icon">🚀</span> 快速新增旅遊</div>
+                <aside id="compose-sheet" class="control-panel app-sheet" aria-hidden="true">
+                    <div class="sheet-handle" aria-hidden="true"></div>
+                    <div class="sheet-header">
+                        <div>
+                            <p class="sheet-kicker">Compose</p>
+                            <div class="panel-title" id="compose-sheet-title"><span class="panel-title-icon">✈️</span> 新增旅程</div>
+                        </div>
+                        <button type="button" class="sheet-close-btn" data-close-sheet="compose">完成</button>
+                    </div>
+                    <p class="sheet-subtitle">用單一 sheet 完成新增與編輯，避免常駐側欄搶走地圖與紀錄的層級。</p>
+
                     <form id="tracker-form" autocomplete="off">
                         <div class="input-group">
                             <div class="field-wrap">
@@ -110,104 +179,228 @@
                             </div>
                         </div>
 
-                        <button type="submit" id="submit-btn" class="btn-submit">🚀 空降新領地</button>
-                        <button type="button" id="cancel-edit-btn" class="btn-cancel">✕ 取消編輯</button>
+                        <div class="sheet-actions">
+                            <button type="submit" id="submit-btn" class="btn-submit">儲存</button>
+                            <button type="button" id="cancel-edit-btn" class="btn-cancel">取消編輯</button>
+                        </div>
                     </form>
-                </div>
+                </aside>
 
-                <div class="log-section">
+                <section class="log-section" id="section-log">
                     <div class="log-header">
-                        <div class="log-title">📋 戰略日誌</div>
-                        <div class="log-filters">
-                            <input class="filter-input" type="text" id="search-log" placeholder="🔍 搜尋">
-                            <select class="filter-select" id="filter-continent">
-                                <option value="all">所有洲</option>
-                                <option value="Asia">亞洲</option>
-                                <option value="Europe">歐洲</option>
-                                <option value="Americas">美洲</option>
-                                <option value="Oceania">大洋洲</option>
-                                <option value="Africa">非洲</option>
-                            </select>
-                            <select class="filter-select" id="filter-year">
-                                <option value="all">所有年份</option>
-                            </select>
-                            <select class="filter-select" id="sort-by">
-                                <option value="date">出征日期</option>
-                                <option value="rank">Vibe 排名</option>
-                            </select>
+                        <div>
+                            <p class="section-eyebrow">Records</p>
+                            <div class="log-title">旅遊紀錄</div>
+                        </div>
+                        <div class="log-header-actions">
+                            <button type="button" class="inline-action-btn" data-open-sheet="filters">篩選與排序</button>
+                            <button type="button" class="inline-action-btn inline-action-btn--primary" data-open-sheet="compose">新增</button>
                         </div>
                     </div>
 
-                    <div id="country-summary-list"></div>
-                    <ul class="log-list" id="log-list"></ul>
-                </div>
+                    <div id="active-filter-chips" class="filter-chip-row"></div>
+
+                    <div id="filters-sheet" class="log-filters app-sheet" aria-hidden="true">
+                        <div class="sheet-handle" aria-hidden="true"></div>
+                        <div class="sheet-header">
+                            <div>
+                                <p class="sheet-kicker">Filter</p>
+                                <div class="panel-title"><span class="panel-title-icon">⚙️</span> 篩選與排序</div>
+                            </div>
+                            <button type="button" class="sheet-close-btn" data-close-sheet="filters">完成</button>
+                        </div>
+                        <p class="sheet-subtitle">改成像 iOS Settings 的分組設定：先快速切，再做精準篩選。</p>
+
+                        <div class="filter-form-stack">
+                            <section class="filter-card-group">
+                                <div class="filter-group-title">快速切換</div>
+                                <div class="filter-shortcuts-grid">
+                                    <button type="button" class="filter-segment is-active" data-filter-continent="all">全部</button>
+                                    <button type="button" class="filter-segment" data-filter-continent="Asia">亞洲</button>
+                                    <button type="button" class="filter-segment" data-filter-continent="Europe">歐洲</button>
+                                    <button type="button" class="filter-segment" data-filter-continent="Americas">美洲</button>
+                                    <button type="button" class="filter-segment" data-filter-continent="Oceania">大洋洲</button>
+                                    <button type="button" class="filter-segment" data-filter-continent="Africa">非洲</button>
+                                </div>
+                                <div class="filter-shortcuts-grid filter-shortcuts-grid--two">
+                                    <button type="button" class="filter-segment is-active" data-filter-sort="date">依日期</button>
+                                    <button type="button" class="filter-segment" data-filter-sort="rank">依排名</button>
+                                </div>
+                            </section>
+
+                            <section class="filter-card-group">
+                                <div class="filter-group-title">搜尋與精準篩選</div>
+                                <label class="settings-row settings-row--stacked">
+                                    <span class="settings-row-copy">
+                                        <span class="settings-row-title">搜尋</span>
+                                        <span class="settings-row-subtitle">用國家或城市名稱快速縮小清單。</span>
+                                    </span>
+                                    <input class="filter-input" type="text" id="search-log" placeholder="搜尋國家或城市">
+                                </label>
+                                <label class="settings-row">
+                                    <span class="settings-row-copy">
+                                        <span class="settings-row-title">洲別</span>
+                                        <span class="settings-row-subtitle">先切主戰區，再看細項。</span>
+                                    </span>
+                                    <select class="filter-select" id="filter-continent">
+                                        <option value="all">所有洲</option>
+                                        <option value="Asia">亞洲</option>
+                                        <option value="Europe">歐洲</option>
+                                        <option value="Americas">美洲</option>
+                                        <option value="Oceania">大洋洲</option>
+                                        <option value="Africa">非洲</option>
+                                    </select>
+                                </label>
+                                <label class="settings-row">
+                                    <span class="settings-row-copy">
+                                        <span class="settings-row-title">年份</span>
+                                        <span class="settings-row-subtitle">回看某一年集中出征的軌跡。</span>
+                                    </span>
+                                    <select class="filter-select" id="filter-year">
+                                        <option value="all">所有年份</option>
+                                    </select>
+                                </label>
+                                <label class="settings-row">
+                                    <span class="settings-row-copy">
+                                        <span class="settings-row-title">排序</span>
+                                        <span class="settings-row-subtitle">日期優先或 vibe 優先。</span>
+                                    </span>
+                                    <select class="filter-select" id="sort-by">
+                                        <option value="date">出征日期</option>
+                                        <option value="rank">Vibe 排名</option>
+                                    </select>
+                                </label>
+                            </section>
+
+                            <button type="button" id="reset-filters-btn" class="sheet-secondary-btn">清除所有篩選</button>
+                        </div>
+                    </div>
+
+                    <div class="log-summary-shell">
+                        <div class="list-section-title-row">
+                            <div>
+                                <div class="list-section-title">Country Summary</div>
+                                <div class="list-section-copy">像 Health 摘要一樣，先看主據點，再看前幾名國家。</div>
+                            </div>
+                            <span class="summary-section-badge">Top Focus</span>
+                        </div>
+                        <div id="country-summary-hero" class="country-summary-hero"></div>
+                        <div id="country-summary-list" class="summary-rail summary-rail--compact"></div>
+                    </div>
+                    <div class="log-list" id="log-list"></div>
+                </section>
             </div>
 
-            <details class="secondary-panel">
-    <summary class="secondary-panel-summary">
-        <span>📊 統計摘要</span>
-        <span class="secondary-panel-hint">點開查看</span>
-    </summary>
+            <section class="insights-stack" id="section-insights">
+                <div class="section-headline">
+                    <div>
+                        <p class="section-eyebrow">Insights</p>
+                        <h2 class="section-title">統計與圖表</h2>
+                    </div>
+                    <p class="section-copy">把資訊做成安靜的層級，讓數字與圖表自己說話。</p>
+                </div>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-label">解鎖國家</div>
-            <div class="stat-number" id="count-country">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">探索世界進度</div>
-            <div class="stat-number" id="explore-percent">0.00%</div>
-            <div class="sub-text" id="explore-area">0 km² / 1.48億 km²</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">解鎖據點總數</div>
-            <div class="stat-number" id="count-region">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">旅行分散度 HHI</div>
-            <div class="stat-number gold" id="exposure-continent">0.00</div>
-            <div class="sub-text" id="exposure-country">評估中...</div>
+                <details class="secondary-panel" open>
+                    <summary class="secondary-panel-summary">
+                        <span>統計摘要</span>
+                        <span class="secondary-panel-hint">Tap to collapse</span>
+                    </summary>
+
+                    <div class="stats-overview">
+                        <article class="stat-hero-card">
+                            <div class="stat-hero-kicker">World Coverage</div>
+                            <div class="stat-hero-number" id="explore-percent">0.00%</div>
+                            <div class="stat-hero-detail" id="explore-area">0 km² / 1.48億 km²</div>
+                            <div class="stat-hero-footnote">像 Health 首卡一樣，先看最重要的總進度。</div>
+                        </article>
+
+                        <div class="metrics-group" role="list" aria-label="統計摘要">
+                            <article class="metric-row" role="listitem">
+                                <div>
+                                    <div class="metric-label">解鎖國家</div>
+                                    <div class="metric-note">以國家數看廣度</div>
+                                </div>
+                                <div class="metric-value" id="count-country">0</div>
+                            </article>
+                            <article class="metric-row" role="listitem">
+                                <div>
+                                    <div class="metric-label">解鎖據點總數</div>
+                                    <div class="metric-note">以城市 / 地點看密度</div>
+                                </div>
+                                <div class="metric-value" id="count-region">0</div>
+                            </article>
+                            <article class="metric-row metric-row--stacked" role="listitem">
+                                <div>
+                                    <div class="metric-label">旅行分散度 HHI</div>
+                                    <div class="metric-note" id="exposure-country">評估中...</div>
+                                </div>
+                                <div class="metric-value gold" id="exposure-continent">0.00</div>
+                            </article>
+                        </div>
+                    </div>
+                </details>
+
+                <details class="secondary-panel" open>
+                    <summary class="secondary-panel-summary">
+                        <span>圖表分析</span>
+                        <span class="secondary-panel-hint">Tap to collapse</span>
+                    </summary>
+
+                    <div class="chart-wrapper">
+                        <div class="chart-container">
+                            <div class="chart-topline"><div class="chart-title">年度出征統計</div><span id="annual-chart-badge" class="chart-badge">Trend</span></div>
+                            <div class="chart-subtitle" id="annual-chart-insight">等待資料中。</div>
+                            <div class="chart-canvas-wrap"><canvas id="annualChart"></canvas></div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-topline"><div class="chart-title">洲別分布</div><span id="continent-chart-badge" class="chart-badge">Mix</span></div>
+                            <div class="chart-subtitle" id="continent-chart-insight">等待資料中。</div>
+                            <div class="chart-canvas-wrap"><canvas id="continentPieChart"></canvas></div>
+                        </div>
+                    </div>
+                </details>
+            </section>
         </div>
     </div>
-</details>
 
-            <details class="secondary-panel">
-    <summary class="secondary-panel-summary">
-        <span>📈 圖表分析</span>
-        <span class="secondary-panel-hint">點開查看</span>
-    </summary>
+    <nav class="bottom-tabbar" aria-label="Primary">
+        <button type="button" class="tabbar-btn is-active" data-target="section-map"><span>🗺️</span><span>地圖</span></button>
+        <button type="button" class="tabbar-btn" data-target="section-log"><span>🧾</span><span>紀錄</span></button>
+        <button type="button" class="tabbar-btn" data-target="section-insights"><span>📈</span><span>洞察</span></button>
+        <button type="button" class="tabbar-btn" data-target="section-settings"><span>⚙️</span><span>工具</span></button>
+    </nav>
 
-    <div class="chart-wrapper">
-        <div class="chart-container">
-            <div class="chart-title">▸ 年度出征統計</div>
-            <div class="chart-canvas-wrap"><canvas id="annualChart"></canvas></div>
+    <aside id="detail-drawer" class="detail-drawer app-sheet" aria-hidden="true">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="sheet-header">
+            <div>
+                <p id="detail-drawer-kicker" class="sheet-kicker">Detail</p>
+                <div id="detail-drawer-title" class="panel-title"><span class="panel-title-icon">🧭</span> 詳情</div>
+            </div>
+            <button type="button" class="sheet-close-btn" data-close-sheet="detail">完成</button>
         </div>
-        <div class="chart-container">
-            <div class="chart-title">▸ 洲別分布</div>
-            <div class="chart-canvas-wrap"><canvas id="continentPieChart"></canvas></div>
+        <p id="detail-drawer-subtitle" class="sheet-subtitle">點擊旅程紀錄或國家摘要後，這裡會顯示更深一層的細節。</p>
+        <div id="detail-drawer-content" class="detail-drawer-content"></div>
+    </aside>
+
+    <div id="sheet-backdrop" class="sheet-backdrop" aria-hidden="true"></div>
+    <div id="toast-root" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+
+    <div id="app-modal" class="app-modal" aria-hidden="true">
+        <div class="app-modal-backdrop" data-close-modal></div>
+
+        <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+            <div class="app-modal-header">
+                <h3 id="app-modal-title">提示</h3>
+                <button type="button" id="app-modal-close" class="app-modal-close">✕</button>
+            </div>
+
+            <div id="app-modal-body" class="app-modal-body"></div>
+
+            <div id="app-modal-actions" class="app-modal-actions"></div>
         </div>
     </div>
-</details>
-        </div>
-    </div>
 
-    <div id="toast-root" class="toast-root"></div>
-
-<div id="app-modal" class="app-modal" aria-hidden="true">
-    <div class="app-modal-backdrop" data-close-modal></div>
-
-    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
-        <div class="app-modal-header">
-            <h3 id="app-modal-title">提示</h3>
-            <button type="button" id="app-modal-close" class="app-modal-close">✕</button>
-        </div>
-
-        <div id="app-modal-body" class="app-modal-body"></div>
-
-        <div id="app-modal-actions" class="app-modal-actions"></div>
-    </div>
-</div>
-
-<script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
