@@ -15,6 +15,50 @@ let countryAreaCache = {};
 let locations = [];
 let editingId = null;
 
+const REMOTE_API_BASE = 'https://travel-command-api.onrender.com';
+const LOCAL_API_CANDIDATES = ['http://127.0.0.1:8000', 'http://localhost:8000'];
+
+function getSameOriginApiBase() {
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        return window.location.origin;
+    }
+    return null;
+}
+
+function getApiBaseCandidates() {
+    const candidates = [];
+    const sameOrigin = getSameOriginApiBase();
+    if (sameOrigin) candidates.push(sameOrigin);
+    LOCAL_API_CANDIDATES.forEach(url => { if (!candidates.includes(url)) candidates.push(url); });
+    if (!candidates.includes(REMOTE_API_BASE)) candidates.push(REMOTE_API_BASE);
+    return candidates;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function apiFetch(path, options = {}, { timeoutMs = 12000, expectJson = true } = {}) {
+    let lastError = null;
+    for (const base of getApiBaseCandidates()) {
+        try {
+            const response = await fetchWithTimeout(`${base}${path}`, options, timeoutMs);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return expectJson ? await response.json() : response;
+        } catch (error) {
+            lastError = error;
+            console.warn(`API request failed via ${base}${path}:`, error);
+        }
+    }
+    throw lastError || new Error('API unavailable');
+}
+
 async function initApp() {
     // 1. 從 Supabase 撈取歷史戰報
     const { data, error } = await supabaseClient.from('travel_logs').select('*');
@@ -955,6 +999,10 @@ function renderChart(filteredLocs = locations) {
     const barCanvas = document.getElementById('annualChart');
     const pieCanvas = document.getElementById('continentPieChart');
     if (!barCanvas || !pieCanvas) return;
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js 未載入，略過圖表渲染。');
+        return;
+    }
 
     const yearCounts = {};
     const yearDays = {};
@@ -983,17 +1031,21 @@ function renderChart(filteredLocs = locations) {
         return new Set(locsUp.map(l => (l.country || '').toLowerCase())).size;
     });
 
-    destroyChart('annual');
-    chartRegistry.annual = new Chart(
-        barCanvas.getContext('2d'),
-        getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
-    );
+    try {
+        destroyChart('annual');
+        chartRegistry.annual = new Chart(
+            barCanvas.getContext('2d'),
+            getAnnualChartConfig(labels, dataCounts, dataDays, cumulativeCountries)
+        );
 
-    destroyChart('continent');
-    chartRegistry.continent = new Chart(
-        pieCanvas.getContext('2d'),
-        getContinentChartConfig(continentCounts)
-    );
+        destroyChart('continent');
+        chartRegistry.continent = new Chart(
+            pieCanvas.getContext('2d'),
+            getContinentChartConfig(continentCounts)
+        );
+    } catch (error) {
+        console.error('圖表渲染失敗:', error);
+    }
 }
 
 // ==========================================
@@ -1096,8 +1148,6 @@ function renderUI(filteredLocations = getFilteredLocations()) {
     document.getElementById('exposure-country').innerText =
         totalDaysAll > 0 ? `${concentrationText} (H: ${entropy.toFixed(2)})` : '無資料';
 
-    renderChart(filteredLocations);
-
     const sorted = [...filteredLocations].sort((a, b) => {
         if (sortBy === 'rank') {
             return parseInt(a.ranking || 999) - parseInt(b.ranking || 999);
@@ -1174,6 +1224,8 @@ function renderUI(filteredLocations = getFilteredLocations()) {
 
     document.getElementById('count-country').innerText = Object.keys(countriesData).length;
     document.getElementById('count-region').innerText = uniqueCities.size;
+
+    renderChart(filteredLocations);
 }
 
 ['search-log','filter-year','filter-continent','sort-by'].forEach(id => {
@@ -1231,8 +1283,7 @@ regionInput.addEventListener('input', function() {
     debounceTimer=setTimeout(async()=>{
         try {
             // 已更新：加上你的 ngrok 網址與繞過警告的 header
-            const res = await fetch(`https://travel-command-api.onrender.com/api/search?q=${encodeURIComponent(val)}`);
-            const data = await res.json(); 
+            const data = await apiFetch(`/api/search?q=${encodeURIComponent(val)}`, {}, { timeoutMs: 10000 }); 
             autocompleteList.innerHTML='';
             if(data.length===0){ autocompleteList.style.display='none'; return; }
             data.forEach(item=>{
@@ -1260,9 +1311,7 @@ dateStartEl?.addEventListener('change',function(){
 
 async function fetchRegionBoundary(region, country) {
     try {
-        const url = `https://travel-command-api.onrender.com/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`;
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await apiFetch(`/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`, {}, { timeoutMs: 12000 });
         if(data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
     } catch(e){ 
         console.error("邊界抓取失敗:", e); 
@@ -1504,19 +1553,13 @@ setButtonLoading(btn, UI_TEXT.buttons.aiLoading, {
 
     try {
         // 2. 呼叫 Render 雲端 Python FastAPI (已換成正式網址，並移除 ngrok header)
-        const response = await fetch('https://travel-command-api.onrender.com/api/recommend', {
+        const aiResult = await apiFetch('/api/recommend', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ logs: payload })
-        });
-
-        if (!response.ok) {
-            throw new Error(`伺服器代碼: ${response.status}`);
-        }
-
-        const aiResult = await response.json();
+        }, { timeoutMs: 18000 });
 
         // 3. 展示 AI 運算結果
         const msg = `${UI_TEXT.ai.header}
@@ -1538,7 +1581,16 @@ ${aiResult.reason}`;
 
     } catch (error) {
         console.error('AI 請求失敗:', error);
-        // 修改錯誤提示，提醒休眠狀態
+        const detail = window.location.protocol === 'file:'
+            ? `你目前像是直接開 zip 內的 HTML。前端會先嘗試本機 8000，再退回雲端備援；若還是失敗，代表 API 端沒醒或沒啟動。`
+            : `前端按鈕本身正常，失敗的是 API 端連線。系統已先嘗試同網域 / 本機 8000，再退回雲端備援。`;
+        await showMessageModal({
+            title: 'AI 服務暫時不可用',
+            message: `${UI_TEXT.toast.aiUnavailable}
+
+${detail}`,
+            confirmText: '知道了'
+        });
         showToast(UI_TEXT.toast.aiUnavailable, 'error', 4200);
     } finally {
         // 恢復 UI 狀態
@@ -1825,6 +1877,9 @@ function handleSheetTriggers() {
     document.querySelectorAll('[data-close-sheet]').forEach(btn => {
         btn.addEventListener('click', () => closeSheet(btn.getAttribute('data-close-sheet')));
     });
+
+    document.getElementById('topbar-open-compose')?.addEventListener('click', openComposeSheet);
+    document.getElementById('topbar-open-filters')?.addEventListener('click', openFilterSheet);
 
     document.getElementById('country-summary-hero')?.addEventListener('click', (e) => {
         const card = e.target.closest('[data-open-country-detail]');
