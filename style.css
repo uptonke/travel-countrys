@@ -2352,11 +2352,19 @@ body {
 .map-container,
 .stat-card,
 .chart-container,
-.app-sheet,
 .app-modal-card,
 .bottom-tabbar {
     position: relative;
     overflow: hidden;
+}
+
+/* Keep sheets as true fixed overlays. Safari/iOS was inheriting this block
+   and turning sheets into in-flow blurred cards, so tapping 新增/篩選 only
+   showed the backdrop blur instead of the actual panel. */
+.app-sheet {
+    position: fixed;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .hero-strip::after,
@@ -4019,4 +4027,17 @@ body::after {
     .detail-meta-value {
         text-align: left;
     }
+}
+
+
+/* Final mobile-safe overlay guard */
+.app-sheet,
+.detail-drawer {
+    position: fixed !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sheet-backdrop {
+    position: fixed !important;
 }
