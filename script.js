@@ -1692,6 +1692,14 @@ const scrollSections = ['section-map', 'section-log', 'section-insights', 'secti
     .map(id => document.getElementById(id))
     .filter(Boolean);
 
+function hoistOverlayNodes() {
+    [composeSheet, filtersSheet, detailDrawer, sheetBackdrop].forEach(node => {
+        if (node && node.parentElement !== document.body) {
+            document.body.appendChild(node);
+        }
+    });
+}
+
 const sheetRegistry = {
     compose: composeSheet,
     filters: filtersSheet,
@@ -1703,6 +1711,8 @@ const appShellState = {
     activeSection: 'section-map',
     detailContext: null
 };
+
+hoistOverlayNodes();
 
 function applyAccessibilityPreferences() {
     const mediaQueries = [

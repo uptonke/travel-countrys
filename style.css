@@ -4041,3 +4041,28 @@ body::after {
 .sheet-backdrop {
     position: fixed !important;
 }
+
+
+/* v8 overlay portal hardening */
+#compose-sheet,
+#filters-sheet,
+#detail-drawer {
+    position: fixed !important;
+    z-index: 2200 !important;
+}
+
+#sheet-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2100 !important;
+}
+
+#compose-sheet,
+#filters-sheet {
+    right: max(16px, env(safe-area-inset-right)) !important;
+    bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+}
+
+#filters-sheet {
+    width: min(420px, calc(100vw - 32px)) !important;
+}
