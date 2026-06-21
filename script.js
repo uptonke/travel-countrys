@@ -1309,10 +1309,21 @@ dateStartEl?.addEventListener('change',function(){
     if(dateEndEl.value&&dateEndEl.value<this.value) dateEndEl.value=this.value;
 });
 
-async function fetchRegionBoundary(region, country) {
+async function fetchRegionBoundary(region, country = '') {
     try {
-        const data = await apiFetch(`/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country)}`, {}, { timeoutMs: 12000 });
-        if(data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), geojson: data[0].geojson };
+        const data = await apiFetch(`/api/boundary?region=${encodeURIComponent(region)}&country=${encodeURIComponent(country || '')}`, {}, { timeoutMs: 25000 });
+        if (data && data.length > 0) {
+            const item = data[0];
+            return {
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+                geojson: item.geojson,
+                country: item.address?.country || country || '',
+                region: item.name || region,
+                address: item.address || {},
+                displayName: item.display_name || ''
+            };
+        }
     } catch(e){ 
         console.error("邊界抓取失敗:", e); 
     } 
@@ -1334,13 +1345,15 @@ document.getElementById('tracker-form')?.addEventListener('submit', async functi
     const dStart = dateStartEl.value;
     const dEnd = dateEndEl.value;
     const dateRangeStr = `${formatDateLocal(dStart)} 到 ${formatDateLocal(dEnd)}`;
-    const geoData=await fetchRegionBoundary(regionInput.value.trim(), standardizeCountry(countryInput.value));
+    const geoData = await fetchRegionBoundary(regionInput.value.trim(), standardizeCountry(countryInput.value));
     if (!geoData) {
     showToast(UI_TEXT.toast.geoNotFound, 'error', 3200);
     syncSubmitButtonUI();
     return;
 }
-    const normalizedCountry = formatPlaceName(standardizeCountry(countryInput.value));
+    const inferredCountry = geoData.country || countryInput.value;
+    if (!countryInput.value.trim() && inferredCountry) countryInput.value = inferredCountry;
+    const normalizedCountry = formatPlaceName(standardizeCountry(inferredCountry));
 const normalizedRegion = formatPlaceName(regionInput.value.trim());
 
 const newLog = {
