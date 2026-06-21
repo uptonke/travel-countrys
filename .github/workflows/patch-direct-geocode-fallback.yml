@@ -1,0 +1,177 @@
+name: One-time Direct Geocode Fallback Patch
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/patch-direct-geocode-fallback.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Patch direct Nominatim fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          script_path = Path('script.js')
+          script = script_path.read_text(encoding='utf-8')
+
+          script = script.replace(
+              "geoNotFound: '找不到地理資料，請確認拼寫是否正確。',",
+              "geoNotFound: '找不到地理資料，或地理服務暫時無法連線。可稍後再試，或手填國家縮小搜尋。',"
+          )
+
+          replacement = r'''const CLIENT_COUNTRY_CODE_MAP = {
+    china: 'cn', prc: 'cn', '中國': 'cn', '中国': 'cn',
+    taiwan: 'tw', roc: 'tw', '台灣': 'tw', '臺灣': 'tw',
+    japan: 'jp', thailand: 'th', singapore: 'sg', malaysia: 'my',
+    'united states': 'us', 'united states of america': 'us', usa: 'us',
+    uk: 'gb', 'united kingdom': 'gb', france: 'fr', germany: 'de',
+    italy: 'it', spain: 'es', netherlands: 'nl', portugal: 'pt',
+    'united arab emirates': 'ae', uae: 'ae'
+};
+
+function getClientCountryCode(country) {
+    return CLIENT_COUNTRY_CODE_MAP[(country || '').trim().toLowerCase()] || '';
+}
+
+function normalizeGeocodeResult(item, fallbackCountry = '', fallbackRegion = '') {
+    if (!item) return null;
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    return {
+        lat,
+        lng,
+        geojson: item.geojson || null,
+        country: item.address?.country || fallbackCountry || '',
+        region: item.name || fallbackRegion || '',
+        address: item.address || {},
+        displayName: item.display_name || ''
+    };
+}
+
+function rankGeocodeCandidate(item, region) {
+    const regionLower = (region || '').trim().toLowerCase();
+    const name = `${item?.name || ''} ${item?.display_name || ''}`.toLowerCase();
+    const geoType = item?.geojson?.type;
+    let score = 0;
+
+    if (regionLower && name.includes(regionLower)) score += 4;
+    if (geoType === 'Polygon' || geoType === 'MultiPolygon') score += 3;
+    if (item?.class === 'boundary' || ['administrative', 'city', 'municipality'].includes(item?.type)) score += 2;
+    if (item?.lat && item?.lon) score += 1;
+
+    return score;
+}
+
+function sortGeocodeCandidates(data, region) {
+    return [...(Array.isArray(data) ? data : [])].sort((a, b) => rankGeocodeCandidate(b, region) - rankGeocodeCandidate(a, region));
+}
+
+async function directNominatimSearch(region, country = '') {
+    const countryCode = getClientCountryCode(country);
+    const baseParams = {
+        format: 'json',
+        addressdetails: '1',
+        limit: '5',
+        polygon_geojson: '1',
+        polygon_threshold: '0.005',
+        'accept-language': 'en'
+    };
+
+    const variants = [
+        { city: region, country, countrycodes: countryCode },
+        { q: `${region}, ${country}`.trim().replace(/,\s*$/, ''), countrycodes: countryCode },
+        { q: `${region} city, ${country}`.trim().replace(/,\s*$/, ''), countrycodes: countryCode },
+        { q: region, countrycodes: countryCode },
+        { q: `${region}, ${country}`.trim().replace(/,\s*$/, '') }
+    ];
+
+    const seen = new Set();
+
+    for (const variant of variants) {
+        const params = new URLSearchParams(baseParams);
+        Object.entries(variant).forEach(([key, value]) => {
+            if (value) params.set(key, value);
+        });
+
+        const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+        if (seen.has(url)) continue;
+        seen.add(url);
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) continue;
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                return sortGeocodeCandidates(data, region)[0];
+            }
+        } catch (error) {
+            console.warn('Direct Nominatim fallback failed:', error);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    return null;
+}
+
+async function fetchRegionBoundary(region, country = '') {
+    const normalizedRegion = (region || '').trim();
+    const normalizedCountry = (country || '').trim();
+    if (!normalizedRegion) return null;
+
+    try {
+        const data = await apiFetch(`/api/boundary?region=${encodeURIComponent(normalizedRegion)}&country=${encodeURIComponent(normalizedCountry)}`, {}, { timeoutMs: 25000 });
+        if (data && data.length > 0) {
+            const best = sortGeocodeCandidates(data, normalizedRegion)[0];
+            return normalizeGeocodeResult(best, normalizedCountry, normalizedRegion);
+        }
+    } catch(e){
+        console.error("後端邊界抓取失敗，改用前端直連備援:", e);
+    }
+
+    const fallback = await directNominatimSearch(normalizedRegion, normalizedCountry);
+    return normalizeGeocodeResult(fallback, normalizedCountry, normalizedRegion);
+}
+
+'''
+
+          pattern = r"async function fetchRegionBoundary\(region, country = ''\) \{.*?\n\}\n\n(?=document\.getElementById\('tracker-form'\))"
+          script, count = re.subn(pattern, replacement, script, flags=re.S)
+          if count != 1:
+              raise SystemExit(f'fetchRegionBoundary replacement count = {count}')
+
+          script_path.write_text(script, encoding='utf-8')
+          PY
+
+      - name: Remove one-time workflow
+        run: rm -f .github/workflows/patch-direct-geocode-fallback.yml
+
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add script.js .github/workflows/patch-direct-geocode-fallback.yml
+          git commit -m "Add direct geocoding fallback"
+          git push
