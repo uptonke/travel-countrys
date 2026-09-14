@@ -3,7 +3,7 @@
 (() => {
     const stableAppScriptUrl = 'https://cdn.jsdelivr.net/gh/uptonke/travel-countrys@585e4cb42eb4b31e6eb939b149d6690a90cbb80b/script.js';
     const basemapModuleUrl = 'basemap-v2.js?v=a688d5aad26f80c6f87327b58cfe79fd15417a87';
-    const timelineModuleUrl = 'timeline-v2.js?v=84ff16fedff0a854c7c1ff1b7a6b48ee7a3e9bab';
+    const timelineModuleUrl = 'timeline-v3.js?v=ed213a4056b3cfe9bd66b4e528645cc515147e44';
 
     let domContentLoadedFired = document.readyState !== 'loading';
     if (!domContentLoadedFired) {
